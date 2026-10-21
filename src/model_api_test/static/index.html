@@ -1,0 +1,1275 @@
+```html
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#000000">
+    <title>Sign Language — Real-time Recognition</title>
+
+    <style>
+        :root {
+            color-scheme: dark;
+            --background: #000000;
+            --surface: #111111;
+            --surface-elevated: rgba(35, 35, 37, 0.78);
+            --border: rgba(255, 255, 255, 0.11);
+            --text-primary: #f5f5f7;
+            --text-secondary: #a1a1a6;
+            --accent: #2997ff;
+            --success: #30d158;
+            --danger: #ff453a;
+            --radius-large: 28px;
+            --radius-medium: 18px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            min-height: 100%;
+            background: var(--background);
+            scroll-behavior: smooth;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            color: var(--text-primary);
+            background:
+                radial-gradient(
+                    ellipse at 50% -20%,
+                    rgba(41, 151, 255, 0.12),
+                    transparent 55%
+                ),
+                var(--background);
+            font-family:
+                -apple-system,
+                BlinkMacSystemFont,
+                "SF Pro Display",
+                "SF Pro Text",
+                "Helvetica Neue",
+                Arial,
+                sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        button {
+            font: inherit;
+        }
+
+        .app {
+            width: min(1120px, calc(100% - 40px));
+            margin: 0 auto;
+            padding: 32px 0 48px;
+        }
+
+        /* Navigation */
+
+        .navigation {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            padding: 8px 2px 32px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-icon {
+            display: grid;
+            width: 40px;
+            height: 40px;
+            place-items: center;
+            border: 1px solid var(--border);
+            border-radius: 13px;
+            background: linear-gradient(
+                145deg,
+                #29292d,
+                #101012
+            );
+            color: #ffffff;
+        }
+
+        .brand-icon svg {
+            width: 23px;
+            height: 23px;
+        }
+
+        .brand-name {
+            font-size: 16px;
+            font-weight: 650;
+            letter-spacing: -0.4px;
+        }
+
+        .brand-caption {
+            margin-top: 3px;
+            color: var(--text-secondary);
+            font-size: 11px;
+        }
+
+        .connection {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 9px 13px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.035);
+            color: var(--text-secondary);
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        .connection-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #8e8e93;
+            box-shadow: 0 0 0 3px rgba(142, 142, 147, 0.12);
+        }
+
+        .connection.online .connection-dot {
+            background: var(--success);
+            box-shadow: 0 0 0 3px rgba(48, 209, 88, 0.12);
+        }
+
+        .connection.error .connection-dot {
+            background: var(--danger);
+            box-shadow: 0 0 0 3px rgba(255, 69, 58, 0.12);
+        }
+
+        /* Hero */
+
+        .hero {
+            margin: 30px 0 34px;
+            text-align: center;
+        }
+
+        .eyebrow {
+            margin: 0 0 16px;
+            color: var(--accent);
+            font-size: 12px;
+            font-weight: 650;
+            letter-spacing: 1.8px;
+            text-transform: uppercase;
+        }
+
+        .hero h1 {
+            margin: 0;
+            font-size: clamp(38px, 6.5vw, 68px);
+            font-weight: 650;
+            line-height: 1.08;
+            letter-spacing: -3.5px;
+        }
+
+        .hero h1 span {
+            display: block;
+            margin-top: 8px;
+            color: #8e8e93;
+        }
+
+        .hero-description {
+            max-width: 490px;
+            margin: 20px auto 0;
+            color: var(--text-secondary);
+            font-size: 15px;
+            line-height: 1.8;
+            word-break: keep-all;
+        }
+
+        /* Main layout */
+
+        .workspace {
+            display: grid;
+            grid-template-columns: minmax(0, 1.65fr) minmax(260px, 0.8fr);
+            gap: 18px;
+            align-items: stretch;
+        }
+
+        .panel {
+            min-width: 0;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-large);
+            background: var(--surface-elevated);
+            box-shadow: 0 24px 70px rgba(0, 0, 0, 0.24);
+            backdrop-filter: blur(28px);
+            -webkit-backdrop-filter: blur(28px);
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 21px 22px;
+        }
+
+        .panel-title {
+            font-size: 14px;
+            font-weight: 600;
+            letter-spacing: -0.2px;
+        }
+
+        .panel-subtitle {
+            margin-top: 5px;
+            color: var(--text-secondary);
+            font-size: 11px;
+        }
+
+        .live-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 7px 10px;
+            border: 1px solid rgba(48, 209, 88, 0.18);
+            border-radius: 999px;
+            background: rgba(48, 209, 88, 0.08);
+            color: #69df89;
+            font-size: 10px;
+            font-weight: 650;
+            letter-spacing: 0.8px;
+        }
+
+        .live-badge::before {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--success);
+            content: "";
+            animation: pulse 1.8s infinite;
+        }
+
+        /* Camera */
+
+        .camera-container {
+            position: relative;
+            overflow: hidden;
+            margin: 0 12px;
+            aspect-ratio: 4 / 3;
+            border: 1px solid rgba(255, 255, 255, 0.09);
+            border-radius: 20px;
+            background:
+                radial-gradient(
+                    circle at center,
+                    #202024 0%,
+                    #0b0b0d 70%
+                );
+        }
+
+        #video {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+        }
+
+        .camera-placeholder {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            padding: 24px;
+            text-align: center;
+        }
+
+        .camera-placeholder.hidden {
+            display: none;
+        }
+
+        .camera-placeholder svg {
+            width: 44px;
+            height: 44px;
+            color: #6e6e73;
+        }
+
+        .camera-placeholder strong {
+            font-size: 15px;
+            font-weight: 600;
+        }
+
+        .camera-placeholder p {
+            max-width: 260px;
+            margin: 0;
+            color: var(--text-secondary);
+            font-size: 12px;
+            line-height: 1.7;
+        }
+
+        .camera-corner {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            padding: 8px 11px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 999px;
+            background: rgba(0, 0, 0, 0.42);
+            color: #ffffff;
+            font-size: 11px;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+
+        .camera-corner svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        /* Subtitle overlay */
+
+        .prediction-subtitle {
+            position: absolute;
+            right: 14px;
+            bottom: 16px;
+            left: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 9px;
+            min-height: 47px;
+            padding: 10px 16px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 15px;
+            background: rgba(0, 0, 0, 0.64);
+            color: #ffffff;
+            font-size: clamp(14px, 2vw, 19px);
+            font-weight: 600;
+            letter-spacing: -0.3px;
+            text-align: center;
+            word-break: keep-all;
+            backdrop-filter: blur(22px);
+            -webkit-backdrop-filter: blur(22px);
+            transition:
+                background 180ms ease,
+                border-color 180ms ease;
+        }
+
+        .subtitle-indicator {
+            flex: 0 0 auto;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent);
+        }
+
+        .prediction-subtitle.recognized {
+            border-color: rgba(41, 151, 255, 0.35);
+            background: rgba(0, 28, 60, 0.72);
+        }
+
+        .prediction-subtitle.error {
+            border-color: rgba(255, 69, 58, 0.3);
+        }
+
+        .prediction-subtitle.error .subtitle-indicator {
+            background: var(--danger);
+        }
+
+        .camera-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 18px 20px 20px;
+        }
+
+        .camera-status {
+            color: var(--text-secondary);
+            font-size: 11px;
+            line-height: 1.6;
+        }
+
+        .camera-status strong {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .primary-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            min-height: 43px;
+            padding: 0 18px;
+            border: 0;
+            border-radius: 999px;
+            background: var(--accent);
+            color: white;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition:
+                background 160ms ease,
+                transform 160ms ease,
+                opacity 160ms ease;
+        }
+
+        .primary-button:hover {
+            background: #47a5ff;
+        }
+
+        .primary-button:active {
+            transform: scale(0.97);
+        }
+
+        .primary-button:disabled {
+            cursor: not-allowed;
+            opacity: 0.45;
+        }
+
+        .primary-button svg {
+            width: 15px;
+            height: 15px;
+        }
+
+        /* Recognition panel */
+
+        .result-content {
+            padding: 4px 20px 22px;
+        }
+
+        .result-label {
+            margin: 18px 0 10px;
+            color: var(--text-secondary);
+            font-size: 11px;
+            font-weight: 550;
+            letter-spacing: 0.5px;
+        }
+
+        .prediction-box {
+            display: flex;
+            min-height: 118px;
+            flex-direction: column;
+            justify-content: center;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.09);
+            border-radius: var(--radius-medium);
+            background: rgba(0, 0, 0, 0.22);
+        }
+
+        #actionText {
+            overflow-wrap: anywhere;
+            font-size: clamp(27px, 3vw, 38px);
+            font-weight: 650;
+            line-height: 1.25;
+            letter-spacing: -1.5px;
+        }
+
+        .prediction-hint {
+            margin-top: 10px;
+            color: var(--text-secondary);
+            font-size: 11px;
+            line-height: 1.6;
+        }
+
+        .confidence-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            margin: 24px 0 11px;
+            color: var(--text-secondary);
+            font-size: 11px;
+        }
+
+        #confidenceText {
+            color: var(--text-primary);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .progress-track {
+            height: 4px;
+            overflow: hidden;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        #confidenceBar {
+            width: 0%;
+            height: 100%;
+            border-radius: inherit;
+            background: linear-gradient(90deg, #2997ff, #64d2ff);
+            transition: width 220ms ease;
+        }
+
+        .metrics {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 25px;
+        }
+
+        .metric {
+            min-width: 0;
+            padding: 15px 13px;
+            border: 1px solid var(--border);
+            border-radius: 15px;
+            background: rgba(255, 255, 255, 0.025);
+        }
+
+        .metric-label {
+            color: var(--text-secondary);
+            font-size: 10px;
+            line-height: 1.5;
+        }
+
+        .metric-value {
+            margin-top: 9px;
+            font-size: 22px;
+            font-weight: 600;
+            letter-spacing: -0.7px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .metric-unit {
+            margin-left: 3px;
+            color: var(--text-secondary);
+            font-size: 10px;
+            font-weight: 400;
+            letter-spacing: 0;
+        }
+
+        .divider {
+            height: 1px;
+            margin: 22px 0;
+            background: var(--border);
+        }
+
+        .status-line {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            color: var(--text-secondary);
+            font-size: 11px;
+            line-height: 1.7;
+            word-break: keep-all;
+        }
+
+        .status-line svg {
+            flex: 0 0 auto;
+            width: 16px;
+            height: 16px;
+            margin-top: 1px;
+            color: var(--success);
+        }
+
+        /* Footer */
+
+        .footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 28px 2px 0;
+            color: #6e6e73;
+            font-size: 10px;
+            line-height: 1.7;
+        }
+
+        .footer span:last-child {
+            text-align: right;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.4;
+            }
+        }
+
+        @media (max-width: 780px) {
+            .app {
+                width: min(100% - 28px, 560px);
+                padding-top: 18px;
+            }
+
+            .navigation {
+                padding-bottom: 20px;
+            }
+
+            .hero {
+                margin: 28px 0;
+            }
+
+            .hero h1 {
+                letter-spacing: -2px;
+            }
+
+            .hero-description {
+                font-size: 13px;
+            }
+
+            .workspace {
+                grid-template-columns: 1fr;
+            }
+
+            .result-content {
+                padding-bottom: 22px;
+            }
+
+            .prediction-box {
+                min-height: 100px;
+            }
+
+            #actionText {
+                font-size: 34px;
+            }
+
+            .metrics {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        @media (max-width: 380px) {
+            .brand-caption {
+                font-size: 10px;
+            }
+
+            .connection {
+                padding: 8px 10px;
+                font-size: 10px;
+            }
+
+            .panel-header {
+                padding: 18px 16px;
+            }
+
+            .camera-footer {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .primary-button {
+                width: 100%;
+            }
+
+            .footer {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .footer span:last-child {
+                text-align: left;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                scroll-behavior: auto !important;
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <main class="app">
+
+        <nav class="navigation">
+            <div class="brand">
+                <div class="brand-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="1.6"
+                         stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M8 12V5.5a1.5 1.5 0 0 1 3 0V11"/>
+                        <path d="M11 10V4.5a1.5 1.5 0 0 1 3 0V11"/>
+                        <path d="M14 10V6a1.5 1.5 0 0 1 3 0v7"/>
+                        <path d="M8 10.5a1.5 1.5 0 0 0-3 0V15a6 6 0 0 0 6 6h2a6 6 0 0 0 6-6v-3a1.5 1.5 0 0 0-3 0"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="brand-name">Sign Language</div>
+                    <div class="brand-caption">Intelligent Recognition System</div>
+                </div>
+            </div>
+
+            <div id="connectionStatus" class="connection">
+                <span class="connection-dot"></span>
+                <span id="connectionText">연결 준비 중</span>
+            </div>
+        </nav>
+
+        <header class="hero">
+            <p class="eyebrow">A New Way to Communicate</p>
+            <h1>
+                Your hands.
+                <span>Your words.</span>
+            </h1>
+            <p class="hero-description">
+                손의 움직임을 실시간으로 분석하고
+                수어를 텍스트로 변환합니다.
+                더 자연스러운 소통을 위한 시작입니다.
+            </p>
+        </header>
+
+        <section class="workspace" aria-label="실시간 수어 인식">
+
+            <!-- Camera panel -->
+            <section class="panel">
+                <header class="panel-header">
+                    <div>
+                        <div class="panel-title">Live Camera</div>
+                        <div class="panel-subtitle">실시간 카메라 입력</div>
+                    </div>
+                    <span class="live-badge">LIVE</span>
+                </header>
+
+                <div class="camera-container">
+                    <video
+                        id="video"
+                        autoplay
+                        playsinline
+                        muted
+                        aria-label="실시간 카메라 영상"
+                    ></video>
+
+                    <div id="cameraPlaceholder" class="camera-placeholder">
+                        <svg viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="1.5"
+                             stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="5" width="18" height="14" rx="3"/>
+                            <circle cx="12" cy="12" r="3"/>
+                            <path d="m16.5 8.5 1-1"/>
+                        </svg>
+                        <strong>카메라를 시작해 주세요</strong>
+                        <p>
+                            카메라 접근 권한을 허용하면
+                            실시간 수어 인식을 시작할 수 있습니다.
+                        </p>
+                    </div>
+
+                    <div class="camera-corner">
+                        <svg viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="1.7"
+                             stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="6" width="13" height="12" rx="2"/>
+                            <path d="m16 10 5-3v10l-5-3"/>
+                        </svg>
+                        CAMERA INPUT
+                    </div>
+
+                    <div id="predictionSubtitle" class="prediction-subtitle"
+                         aria-live="polite" aria-atomic="true">
+                        <span class="subtitle-indicator"></span>
+                        <span id="subtitleText">수어 인식 대기 중</span>
+                    </div>
+                </div>
+
+                <div class="camera-footer">
+                    <div class="camera-status">
+                        <div><strong id="cameraStatus">카메라 꺼짐</strong></div>
+                        <div id="streamStatus">스트리밍 대기 중</div>
+                    </div>
+
+                    <button id="cameraButton" class="primary-button" type="button">
+                        <svg id="cameraButtonIcon" viewBox="0 0 24 24"
+                             fill="none" stroke="currentColor" stroke-width="1.8"
+                             stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4 7h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Z"/>
+                            <circle cx="12" cy="12" r="3"/>
+                        </svg>
+                        <span id="cameraButtonText">카메라 시작</span>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Recognition result panel -->
+            <section class="panel">
+                <header class="panel-header">
+                    <div>
+                        <div class="panel-title">Recognition</div>
+                        <div class="panel-subtitle">AI 수어 분석 결과</div>
+                    </div>
+                </header>
+
+                <div class="result-content">
+                    <div class="result-label">RECOGNIZED SIGN</div>
+
+                    <div class="prediction-box">
+                        <div id="actionText" aria-live="polite">-</div>
+                        <div id="predictionHint" class="prediction-hint">
+                            카메라를 시작하면 인식 결과가 표시됩니다.
+                        </div>
+                    </div>
+
+                    <div class="confidence-header">
+                        <span>인식 신뢰도</span>
+                        <span id="confidenceText">--%</span>
+                    </div>
+
+                    <div
+                        class="progress-track"
+                        role="progressbar"
+                        aria-label="인식 신뢰도"
+                        aria-valuemin="0"
+                        aria-valuemax="100"
+                        aria-valuenow="0"
+                        id="confidenceProgress"
+                    >
+                        <div id="confidenceBar"></div>
+                    </div>
+
+                    <div class="metrics">
+                        <div class="metric">
+                            <div class="metric-label">수집 프레임</div>
+                            <div class="metric-value">
+                                <span id="framesText">0</span>
+                                <span class="metric-unit">frames</span>
+                            </div>
+                        </div>
+
+                        <div class="metric">
+                            <div class="metric-label">인식 상태</div>
+                            <div id="stableText" class="metric-value">대기</div>
+                        </div>
+                    </div>
+
+                    <div class="divider"></div>
+
+                    <div class="status-line">
+                        <svg viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="1.7"
+                             stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="9"/>
+                            <path d="m8 12 2.5 2.5L16 9"/>
+                        </svg>
+                        <span id="detailStatus">
+                            인식 서버 연결 후 실시간 분석이 진행됩니다.
+                        </span>
+                    </div>
+                </div>
+            </section>
+        </section>
+
+        <footer class="footer">
+            <span>Sign Language Recognition · AI-powered</span>
+            <span>Designed for natural communication</span>
+        </footer>
+    </main>
+
+    <canvas id="canvas" hidden></canvas>
+
+    <script>
+        const video = document.getElementById("video");
+        const canvas = document.getElementById("canvas");
+        const ctx = canvas.getContext("2d");
+
+        const cameraButton = document.getElementById("cameraButton");
+        const cameraButtonText = document.getElementById("cameraButtonText");
+        const cameraButtonIcon = document.getElementById("cameraButtonIcon");
+
+        const cameraPlaceholder = document.getElementById("cameraPlaceholder");
+        const cameraStatus = document.getElementById("cameraStatus");
+        const streamStatus = document.getElementById("streamStatus");
+
+        const connectionStatus = document.getElementById("connectionStatus");
+        const connectionText = document.getElementById("connectionText");
+
+        const actionText = document.getElementById("actionText");
+        const predictionHint = document.getElementById("predictionHint");
+        const subtitleText = document.getElementById("subtitleText");
+        const predictionSubtitle = document.getElementById("predictionSubtitle");
+
+        const confidenceText = document.getElementById("confidenceText");
+        const confidenceBar = document.getElementById("confidenceBar");
+        const confidenceProgress = document.getElementById("confidenceProgress");
+        const framesText = document.getElementById("framesText");
+        const stableText = document.getElementById("stableText");
+        const detailStatus = document.getElementById("detailStatus");
+
+        const FRAME_WIDTH = 640;
+        const FRAME_HEIGHT = 480;
+        const SEND_INTERVAL = 100;
+
+        let mediaStream = null;
+        let socket = null;
+        let sendTimer = null;
+        let busy = false;
+        let cameraStarting = false;
+        let socketGeneration = 0;
+
+        function setConnection(state, message) {
+            connectionStatus.classList.remove("online", "error");
+
+            if (state === "online") {
+                connectionStatus.classList.add("online");
+            } else if (state === "error") {
+                connectionStatus.classList.add("error");
+            }
+
+            connectionText.textContent = message;
+        }
+
+        function setSubtitle(message, state = "") {
+            subtitleText.textContent = message;
+            predictionSubtitle.classList.toggle(
+                "recognized",
+                state === "recognized"
+            );
+            predictionSubtitle.classList.toggle(
+                "error",
+                state === "error"
+            );
+        }
+
+        function resetResults() {
+            actionText.textContent = "-";
+            predictionHint.textContent =
+                "카메라를 시작하면 인식 결과가 표시됩니다.";
+
+            confidenceText.textContent = "--%";
+            confidenceBar.style.width = "0%";
+            confidenceProgress.setAttribute("aria-valuenow", "0");
+
+            framesText.textContent = "0";
+            stableText.textContent = "대기";
+
+            detailStatus.textContent =
+                "인식 서버 연결 후 실시간 분석이 진행됩니다.";
+
+            setSubtitle("수어 인식 대기 중");
+        }
+
+        function updateResults(data) {
+            if (data.error) {
+                actionText.textContent = "오류";
+                predictionHint.textContent = String(data.error);
+                detailStatus.textContent = "서버에서 인식 오류를 반환했습니다.";
+                setSubtitle("인식 오류", "error");
+                return;
+            }
+
+            const prediction = data.action ?? "-";
+
+            actionText.textContent = prediction;
+
+            const confidence = Number(data.confidence);
+            const validConfidence = Number.isFinite(confidence);
+            const confidencePercent = validConfidence
+                ? Math.max(0, Math.min(100, confidence <= 1
+                    ? confidence * 100
+                    : confidence))
+                : 0;
+
+            confidenceText.textContent = validConfidence
+                ? `${confidencePercent.toFixed(1)}%`
+                : "--%";
+
+            confidenceBar.style.width = `${confidencePercent}%`;
+            confidenceProgress.setAttribute(
+                "aria-valuenow",
+                String(Math.round(confidencePercent))
+            );
+
+            const frames = Number(data.frames_collected ?? 0);
+            framesText.textContent = Number.isFinite(frames) ? frames : 0;
+
+            const isStable = Boolean(data.stable);
+            stableText.textContent = isStable ? "확정" : "분석 중";
+
+            if (prediction === "-" || prediction === "") {
+                predictionHint.textContent = "손의 움직임을 분석하고 있습니다.";
+                setSubtitle("수어 인식 중...");
+            } else {
+                predictionHint.textContent = isStable
+                    ? "인식 결과가 안정적으로 확인되었습니다."
+                    : "수어 패턴을 분석하고 있습니다.";
+
+                setSubtitle(
+                    String(prediction),
+                    isStable ? "recognized" : ""
+                );
+            }
+
+            detailStatus.textContent = isStable
+                ? "인식 결과가 안정적으로 확인되었습니다."
+                : "실시간으로 손의 움직임을 분석하고 있습니다.";
+        }
+
+        function closeSocket() {
+            socketGeneration++;
+
+            if (socket) {
+                const oldSocket = socket;
+                socket = null;
+
+                oldSocket.onopen = null;
+                oldSocket.onmessage = null;
+                oldSocket.onerror = null;
+                oldSocket.onclose = null;
+
+                if (
+                    oldSocket.readyState === WebSocket.OPEN ||
+                    oldSocket.readyState === WebSocket.CONNECTING
+                ) {
+                    oldSocket.close();
+                }
+            }
+
+            busy = false;
+        }
+
+        function connectSocket() {
+            closeSocket();
+
+            const generation = socketGeneration;
+            const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+            const socketUrl =
+                `${protocol}//${location.host}/ws/sign`;
+
+            setConnection("connecting", "서버 연결 중");
+            streamStatus.textContent = "WebSocket 연결 중";
+
+            try {
+                socket = new WebSocket(socketUrl);
+            } catch (error) {
+                setConnection("error", "연결 실패");
+                streamStatus.textContent = "WebSocket 생성 실패";
+                detailStatus.textContent = String(error);
+                return;
+            }
+
+            const currentSocket = socket;
+
+            currentSocket.onopen = () => {
+                if (
+                    generation !== socketGeneration ||
+                    socket !== currentSocket
+                ) {
+                    return;
+                }
+
+                setConnection("online", "서버 연결됨");
+                streamStatus.textContent = "실시간 스트리밍 연결됨";
+                detailStatus.textContent = "서버와 연결되어 분석을 준비했습니다.";
+                startSendingFrames();
+            };
+
+            currentSocket.onmessage = (event) => {
+                if (
+                    generation !== socketGeneration ||
+                    socket !== currentSocket
+                ) {
+                    return;
+                }
+
+                busy = false;
+
+                try {
+                    const data = JSON.parse(event.data);
+                    updateResults(data);
+                } catch (error) {
+                    console.error("서버 응답 JSON 오류:", error);
+                    setSubtitle("응답 데이터 확인 필요", "error");
+                    detailStatus.textContent =
+                        "서버 응답을 JSON으로 처리할 수 없습니다.";
+                }
+            };
+
+            currentSocket.onerror = () => {
+                if (
+                    generation !== socketGeneration ||
+                    socket !== currentSocket
+                ) {
+                    return;
+                }
+
+                setConnection("error", "연결 오류");
+                streamStatus.textContent = "WebSocket 통신 오류";
+                detailStatus.textContent =
+                    "서버 상태와 /ws/sign 경로를 확인해 주세요.";
+            };
+
+            currentSocket.onclose = () => {
+                if (
+                    generation !== socketGeneration ||
+                    socket !== currentSocket
+                ) {
+                    return;
+                }
+
+                busy = false;
+                setConnection("error", "연결 끊김");
+                streamStatus.textContent = "WebSocket 연결이 종료되었습니다.";
+            };
+        }
+
+        function startSendingFrames() {
+            stopSendingFrames();
+
+            sendTimer = setInterval(() => {
+                if (
+                    !mediaStream ||
+                    video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA ||
+                    !socket ||
+                    socket.readyState !== WebSocket.OPEN ||
+                    busy
+                ) {
+                    return;
+                }
+
+                canvas.width = FRAME_WIDTH;
+                canvas.height = FRAME_HEIGHT;
+
+                // 기존 동작 유지: 카메라 프레임을 캔버스에 그려 서버로 전송.
+                // CSS의 좌우 반전은 캔버스 픽셀에는 적용되지 않습니다.
+                ctx.drawImage(video, 0, 0, FRAME_WIDTH, FRAME_HEIGHT);
+
+                busy = true;
+
+                canvas.toBlob((blob) => {
+                    if (
+                        !blob ||
+                        !socket ||
+                        socket.readyState !== WebSocket.OPEN
+                    ) {
+                        busy = false;
+                        return;
+                    }
+
+                    try {
+                        socket.send(blob);
+                    } catch (error) {
+                        busy = false;
+                        console.error("프레임 전송 실패:", error);
+                    }
+                }, "image/jpeg", 0.8);
+            }, SEND_INTERVAL);
+        }
+
+        function stopSendingFrames() {
+            if (sendTimer !== null) {
+                clearInterval(sendTimer);
+                sendTimer = null;
+            }
+
+            busy = false;
+        }
+
+        async function startCamera() {
+            if (cameraStarting || mediaStream) {
+                return;
+            }
+
+            cameraStarting = true;
+            cameraButton.disabled = true;
+            cameraStatus.textContent = "카메라 시작 중";
+            setSubtitle("카메라를 준비하고 있습니다...");
+
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: FRAME_WIDTH },
+                        height: { ideal: FRAME_HEIGHT },
+                        facingMode: "user"
+                    },
+                    audio: false
+                });
+
+                video.srcObject = mediaStream;
+                await video.play();
+
+                cameraPlaceholder.classList.add("hidden");
+                cameraStatus.textContent = "카메라 실행 중";
+                cameraButtonText.textContent = "카메라 종료";
+
+                cameraButtonIcon.innerHTML = `
+                    <rect x="6" y="6" width="12" height="12" rx="2"/>
+                `;
+
+                connectSocket();
+            } catch (error) {
+                console.error("카메라 시작 실패:", error);
+
+                if (mediaStream) {
+                    mediaStream.getTracks().forEach(track => track.stop());
+                    mediaStream = null;
+                }
+
+                video.srcObject = null;
+                cameraStatus.textContent = "카메라 시작 실패";
+                streamStatus.textContent = error.message || "카메라 접근 오류";
+
+                setConnection("error", "카메라 오류");
+                setSubtitle("카메라 접근 권한을 확인해 주세요", "error");
+
+                detailStatus.textContent =
+                    "브라우저의 카메라 권한과 HTTPS 또는 localhost 환경을 확인해 주세요.";
+            } finally {
+                cameraStarting = false;
+                cameraButton.disabled = false;
+            }
+        }
+
+        function stopCamera() {
+            stopSendingFrames();
+            closeSocket();
+
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+                mediaStream = null;
+            }
+
+            video.pause();
+            video.srcObject = null;
+
+            cameraPlaceholder.classList.remove("hidden");
+
+            cameraStatus.textContent = "카메라 꺼짐";
+            streamStatus.textContent = "스트리밍 대기 중";
+
+            cameraButtonText.textContent = "카메라 시작";
+            cameraButtonIcon.innerHTML = `
+                <path d="M4 7h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Z"/>
+                <circle cx="12" cy="12" r="3"/>
+            `;
+
+            setConnection("offline", "연결 종료");
+            resetResults();
+        }
+
+        cameraButton.addEventListener("click", () => {
+            if (mediaStream) {
+                stopCamera();
+            } else {
+                startCamera();
+            }
+        });
+
+        window.addEventListener("beforeunload", () => {
+            stopSendingFrames();
+            closeSocket();
+
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+            }
+        });
+
+        if (!navigator.mediaDevices?.getUserMedia) {
+            cameraButton.disabled = true;
+            cameraStatus.textContent = "브라우저 지원 확인 필요";
+            setConnection("error", "카메라 사용 불가");
+            setSubtitle("HTTPS 또는 localhost에서 접속해 주세요", "error");
+        }
+    </script>
+</body>
+</html>
+```
