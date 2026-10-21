@@ -1,0 +1,1 @@
+uv run uvicorn model_api_test.main:app --app-dir src --reload
