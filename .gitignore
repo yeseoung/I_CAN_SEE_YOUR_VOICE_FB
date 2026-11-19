@@ -8,3 +8,7 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Internal notes (not published)
+SERVICE_ROADMAP.md
+code-review-report.html

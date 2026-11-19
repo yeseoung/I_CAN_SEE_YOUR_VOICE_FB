@@ -1,0 +1,13 @@
+Copyright (c) 2026 고예성 (yeseoung). All rights reserved.
+
+This repository is published for viewing and reference only.
+
+No permission is granted to use, copy, modify, merge, publish, distribute,
+sublicense, or sell any part of this software, including the recognition
+pipeline and the trained model files, without prior written permission from
+the copyright holder.
+
+Third-party components keep their own licenses:
+- src/model_api_test/models/hand_landmarker.task: Google MediaPipe Hand
+  Landmarker model, Apache License 2.0.
+- Python dependencies listed in pyproject.toml: see each package's license.

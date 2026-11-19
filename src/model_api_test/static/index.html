@@ -1,11 +1,10 @@
-```html
 <!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#000000">
-    <title>Sign Language — Real-time Recognition</title>
+    <title>SORI — Real-time Recognition</title>
 
     <style>
         :root {
@@ -696,7 +695,7 @@
                     </svg>
                 </div>
                 <div>
-                    <div class="brand-name">Sign Language</div>
+                    <div class="brand-name">SORI</div>
                     <div class="brand-caption">Intelligent Recognition System</div>
                 </div>
             </div>
@@ -865,12 +864,8 @@
         </footer>
     </main>
 
-    <canvas id="canvas" hidden></canvas>
-
     <script>
         const video = document.getElementById("video");
-        const canvas = document.getElementById("canvas");
-        const ctx = canvas.getContext("2d");
 
         const cameraButton = document.getElementById("cameraButton");
         const cameraButtonText = document.getElementById("cameraButtonText");
@@ -897,7 +892,8 @@
 
         const FRAME_WIDTH = 640;
         const FRAME_HEIGHT = 480;
-        const SEND_INTERVAL = 100;
+        // 학습 데이터가 30fps 영상의 연속 10프레임(0.33초)이라 같은 간격으로 보낸다
+        const SEND_INTERVAL = 33;
 
         let mediaStream = null;
         let socket = null;
@@ -905,6 +901,13 @@
         let busy = false;
         let cameraStarting = false;
         let socketGeneration = 0;
+
+        // 손 검출은 브라우저에서 하고 서버에는 랜드마크만 보낸다
+        let tracker = null;
+        import("/static/hands.js")
+            .then(m => m.createHandTracker())
+            .then(t => { tracker = t; })
+            .catch(error => console.error("손 검출기 로드 실패:", error));
 
         function setConnection(state, message) {
             connectionStatus.classList.remove("online", "error");
@@ -1121,37 +1124,20 @@
                     video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA ||
                     !socket ||
                     socket.readyState !== WebSocket.OPEN ||
-                    busy
+                    busy ||
+                    !tracker
                 ) {
                     return;
                 }
 
-                canvas.width = FRAME_WIDTH;
-                canvas.height = FRAME_HEIGHT;
-
-                // 기존 동작 유지: 카메라 프레임을 캔버스에 그려 서버로 전송.
-                // CSS의 좌우 반전은 캔버스 픽셀에는 적용되지 않습니다.
-                ctx.drawImage(video, 0, 0, FRAME_WIDTH, FRAME_HEIGHT);
-
                 busy = true;
 
-                canvas.toBlob((blob) => {
-                    if (
-                        !blob ||
-                        !socket ||
-                        socket.readyState !== WebSocket.OPEN
-                    ) {
-                        busy = false;
-                        return;
-                    }
-
-                    try {
-                        socket.send(blob);
-                    } catch (error) {
-                        busy = false;
-                        console.error("프레임 전송 실패:", error);
-                    }
-                }, "image/jpeg", 0.8);
+                try {
+                    socket.send(JSON.stringify(tracker.detect(video)));
+                } catch (error) {
+                    busy = false;
+                    console.error("프레임 전송 실패:", error);
+                }
             }, SEND_INTERVAL);
         }
 
@@ -1272,4 +1258,3 @@
     </script>
 </body>
 </html>
-```
