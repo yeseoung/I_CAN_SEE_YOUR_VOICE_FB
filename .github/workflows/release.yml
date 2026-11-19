@@ -18,3 +18,4 @@ jobs:
         with:
           name: SORI ${{ github.ref_name }}
           body_path: .github/release-notes/${{ github.ref_name }}.md
+          prerelease: true  # 졸업 프로젝트 프로토타입 (KERNIX와 같음)
