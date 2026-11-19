@@ -1,0 +1,20 @@
+# Pushing a tag like v0.1.0 publishes a GitHub Release with the notes in .github/release-notes/<tag>.md
+# (same setup as the KERNIX repository; nothing to build here).
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: SORI ${{ github.ref_name }}
+          body_path: .github/release-notes/${{ github.ref_name }}.md
