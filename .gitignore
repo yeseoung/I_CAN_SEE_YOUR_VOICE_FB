@@ -12,3 +12,6 @@ wheels/
 # Internal notes (not published)
 SERVICE_ROADMAP.md
 code-review-report.html
+
+# HTTPS용 로컬 인증서 (README의 HTTPS 실행 참고)
+certs/

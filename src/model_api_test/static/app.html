@@ -3,873 +3,252 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#15181E">
+<meta name="theme-color" content="#17191C">
 <title>SORI — 수어 화상회의</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<!-- React는 빌드 없이 CDN에서 불러온다. react-dom은 같은 react 하나를 쓰도록 external로 받는다 -->
+<script type="importmap">
+{
+    "imports": {
+        "react": "https://esm.sh/react@19.1.0",
+        "react-dom/client": "https://esm.sh/react-dom@19.1.0/client?external=react",
+        "htm": "https://esm.sh/htm@3.1.1"
+    }
+}
+</script>
 <style>
     :root {
         color-scheme: light;
-        --paper: #EDF0F4;
+        --paper: #F1F2EE;
         --surface: #FFFFFF;
-        --ink: #15181E;
-        --ink-soft: #5A626E;
-        --line: #D7DCE3;
-        --signal: #4B3BE4;
-        --signal-soft: #EDEBFF;
-        --live: #0FA968;
-        --danger: #D8303A;
-        --kr: "Apple SD Gothic Neo", "Pretendard", "Malgun Gothic", system-ui, -apple-system, sans-serif;
-        --mono: "SF Mono", ui-monospace, Menlo, monospace;
+        --ink: #17191C;
+        --ink-2: #5F656C;
+        --line: #DCDED8;
+        --caption: #FFD43B;   /* 방송 자막의 노란색: 영상 위에서 가장 잘 읽힌다 */
+        --stage: #1C1F23;
+        --live: #1E9E63;
+        --danger: #D93B30;
+        --font: "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
     }
     * { box-sizing: border-box; }
-    html { background: var(--paper); min-height: 100%; }
+    html, body { margin: 0; min-height: 100%; }
     body {
-        margin: 0; min-height: 100vh; color: var(--ink); background: var(--paper);
-        font-family: var(--kr); line-height: 1.5; -webkit-font-smoothing: antialiased;
+        min-height: 100vh; background: var(--paper); color: var(--ink);
+        font-family: var(--font); font-size: 16px; line-height: 1.55;
+        -webkit-font-smoothing: antialiased; font-feature-settings: "tnum";
     }
-    button { font: inherit; cursor: pointer; }
-    input { font: inherit; }
-    .screen { display: none; }
-    .screen.active { display: block; }
+    button, input, select { font: inherit; color: inherit; }
+    button { cursor: pointer; }
+    h1, h2, p { margin: 0; }
+    :focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
 
-    /* 공통 버튼 */
+    /* 버튼 */
     .btn {
-        appearance: none; border: 1px solid transparent; border-radius: 10px;
-        padding: 13px 18px; font-weight: 600; font-size: 15px;
-        display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-        background: var(--signal); color: #fff; transition: filter .15s, background .15s;
+        appearance: none; border: 1.5px solid transparent; border-radius: 12px;
+        padding: 12px 18px; font-weight: 650; font-size: 15px; line-height: 1.2;
+        display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+        transition: background .15s, border-color .15s, transform .1s;
     }
-    .btn:hover { filter: brightness(1.06); }
-    .btn:active { filter: brightness(.95); }
-    .btn:disabled { opacity: .5; cursor: default; }
-    .btn.block { width: 100%; }
-    .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
-    .btn.ghost:hover { background: var(--paper); filter: none; }
-    .btn.danger { background: var(--danger); }
-    .btn:focus-visible { outline: 3px solid var(--signal-soft); outline-offset: 2px; }
+    .btn:active { transform: translateY(1px); }
+    .btn:disabled { opacity: .55; cursor: default; }
+    .btn-block { width: 100%; }
+    .btn-sm { padding: 8px 14px; font-size: 14px; border-radius: 10px; }
+    .btn-primary { background: var(--ink); color: #fff; }
+    .btn-primary:hover { background: #2C3035; }
+    .btn-caption { background: var(--caption); color: var(--ink); }
+    .btn-caption:hover { background: #FFDC5E; }
+    .btn-line { background: var(--surface); border-color: var(--line); }
+    .btn-line:hover { border-color: var(--ink); }
+    .btn-apple { background: #000; color: #fff; }
+    .btn-apple:hover { background: #222; }
+    .btn svg { width: 18px; height: 18px; flex: none; }
+    .link-btn { background: none; border: 0; padding: 6px 4px; color: var(--ink-2); font-size: 14px; font-weight: 600; }
+    .link-btn:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
 
-    .field { margin-bottom: 14px; }
-    .field label { display: block; font-size: .85rem; color: var(--ink-soft); margin-bottom: 6px; font-weight: 600; }
-    .field input {
-        width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line);
-        background: var(--surface); color: var(--ink); outline: none;
-        transition: border-color .15s, box-shadow .15s;
+    .field { display: block; margin-bottom: 14px; }
+    .field span { display: block; font-size: 14px; font-weight: 600; color: var(--ink-2); margin-bottom: 6px; }
+    .field input, .code-input {
+        width: 100%; padding: 12px 14px; border-radius: 12px; border: 1.5px solid var(--line);
+        background: var(--surface); outline: none; transition: border-color .15s;
     }
-    .field input:focus { border-color: var(--signal); box-shadow: 0 0 0 3px var(--signal-soft); }
-    .msg { margin-top: 12px; font-size: .88rem; color: var(--danger); min-height: 18px; }
-    .msg.info { color: var(--ink-soft); }
-    .hint { margin-top: 22px; font-size: .8rem; color: var(--ink-soft); line-height: 1.7; }
+    .field input:focus, .code-input:focus { border-color: var(--ink); }
+    .msg { min-height: 22px; margin-top: 12px; font-size: 14px; color: var(--danger); }
+    .msg.info { color: var(--ink-2); }
 
-    /* 로그인 — 좌우 2단 */
-    .login { min-height: 100vh; display: grid; grid-template-columns: 1.1fr .9fr; }
-    @media (max-width: 860px) { .login { grid-template-columns: 1fr; } }
+    .wordmark { font-weight: 800; font-size: 20px; letter-spacing: .02em; }
+    .avatar {
+        width: 34px; height: 34px; border-radius: 50%; flex: none;
+        display: inline-flex; align-items: center; justify-content: center;
+        background: var(--caption); color: var(--ink); font-weight: 800; font-size: 15px;
+    }
+    .avatar-lg { width: 60px; height: 60px; font-size: 24px; }
+
+    /* 자막: 회의실과 로그인 데모가 같은 모양을 쓴다 */
+    .caption {
+        position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%);
+        width: max-content; max-width: calc(100% - 32px);
+        padding: 8px 16px; border-radius: 10px; background: rgba(10, 11, 13, .82);
+        color: var(--caption); font-weight: 700; font-size: clamp(20px, 2.3vw, 30px);
+        line-height: 1.35; text-align: center; word-break: keep-all; overflow-wrap: anywhere;
+    }
+    .composing { text-decoration: underline; text-decoration-thickness: 3px; text-underline-offset: 6px; }
+
+    /* 로그인 */
+    .login { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); }
     .login-hero {
-        background: var(--ink); color: #fff;
-        padding: clamp(32px, 6vw, 72px);
-        display: flex; flex-direction: column; justify-content: space-between; gap: 24px;
+        background: var(--ink); color: #fff; padding: clamp(28px, 5vw, 64px);
+        display: flex; flex-direction: column; justify-content: space-between; gap: 40px;
     }
-    @media (max-width: 860px) { .login-hero { min-height: 56vh; } }
-    .brandmark { font-size: 14px; color: #9AA3B2; font-weight: 600; }
-    .hero-copy h1 {
-        font-size: clamp(2rem, 4.2vw, 3.3rem); line-height: 1.16; margin: 0 0 8px;
-        font-weight: 700; letter-spacing: -.02em;
+    .hero-body { max-width: 560px; }
+    .hero-body h1 { font-size: clamp(34px, 4.4vw, 56px); line-height: 1.18; font-weight: 800; letter-spacing: -.025em; }
+    .hero-body > p { margin-top: 16px; color: #B4BAC1; font-size: 17px; max-width: 34ch; }
+    .demo-tile {
+        position: relative; margin-top: clamp(28px, 5vh, 48px); aspect-ratio: 16 / 9; border-radius: 20px; overflow: hidden;
+        background: radial-gradient(60% 80% at 50% 40%, #3A3F46 0%, #24272C 60%, #1A1C20 100%);
     }
-    .hero-copy p { color: #AEB6C2; font-size: 1.02rem; max-width: 36ch; margin: 0; }
-    .reveal { display: flex; align-items: center; gap: clamp(10px, 2vw, 22px); margin: clamp(22px, 5vh, 44px) 0; }
-    .reveal .j { font-size: clamp(2.2rem, 6vw, 4.2rem); font-weight: 700; line-height: 1; color: #fff; opacity: 0; animation: pop .55s forwards; }
-    .reveal .j.j1 { animation-delay: .3s; }
-    .reveal .j.j2 { animation-delay: .9s; }
-    .reveal .arrow { font-size: clamp(1.4rem, 3vw, 2.2rem); color: var(--signal); opacity: 0; animation: fade .5s 1.35s forwards; }
-    .reveal .result {
-        font-size: clamp(2.8rem, 8vw, 5.4rem); font-weight: 800; line-height: 1; color: #fff;
-        opacity: 0; transform: scale(.7); animation: pop .6s 1.65s forwards;
-        text-shadow: 0 0 44px rgba(75, 59, 228, .55);
+    .demo-name, .tile-name {
+        position: absolute; top: 14px; left: 14px; margin: 0; padding: 4px 10px; border-radius: 8px;
+        background: rgba(10, 11, 13, .6); color: #fff; font-size: 13px; font-weight: 600;
     }
-    @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.9); } to { opacity: 1; transform: none; } }
-    @keyframes fade { to { opacity: 1; } }
-    @media (prefers-reduced-motion: reduce) { .reveal * { animation: none !important; opacity: 1 !important; transform: none !important; } }
+    .demo-swap { display: inline-grid; }
+    .demo-swap > * { grid-area: 1 / 1; }
+    .demo-swap .f1 { opacity: 0; animation: show .2s .5s forwards, hide .01s 1.5s forwards; }
+    .demo-swap .f2 { opacity: 0; animation: show .2s 1.5s forwards; }
+    @keyframes show { to { opacity: 1; } }
+    @keyframes hide { to { opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) {
+        .demo-swap .f1 { display: none; }
+        .demo-swap .f2 { animation: none; opacity: 1; }
+    }
+    .hero-foot { color: #80878F; font-size: 14px; }
 
-    .login-form { padding: clamp(32px, 6vw, 64px); display: flex; flex-direction: column; justify-content: center; }
-    .login-form .box { width: min(360px, 100%); margin: 0 auto; }
-    .login-form h2 { font-size: 1.5rem; margin: 0 0 6px; font-weight: 700; }
-    .login-form .lead { color: var(--ink-soft); margin: 0 0 26px; font-size: .95rem; }
-    .sep { display: flex; align-items: center; gap: 12px; color: var(--ink-soft); font-size: .82rem; margin: 20px 0; }
-    .sep::before, .sep::after { content: ""; height: 1px; background: var(--line); flex: 1; }
-    .social { display: flex; flex-direction: column; gap: 10px; }
-    .social button {
-        width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--line);
-        background: var(--surface); color: var(--ink); font-weight: 600; font-size: 15px;
-        display: flex; align-items: center; justify-content: center; gap: 10px; transition: background .15s;
+    .login-panel { display: flex; align-items: center; justify-content: center; padding: clamp(28px, 5vw, 64px); }
+    .login-box { width: min(360px, 100%); }
+    .login-box h2 { font-size: 26px; font-weight: 800; letter-spacing: -.01em; }
+    .login-box .lead { margin: 6px 0 26px; color: var(--ink-2); font-size: 15px; }
+    .sep { display: flex; align-items: center; gap: 12px; margin: 18px 0; color: var(--ink-2); font-size: 13px; }
+    .sep::before, .sep::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+    .social { display: grid; gap: 10px; }
+    .hint { margin-top: 22px; color: var(--ink-2); font-size: 13px; }
+    @media (max-width: 880px) {
+        .login { grid-template-columns: 1fr; }
+        .login-hero { gap: 28px; }
     }
-    .social button:hover { background: #F6F7F9; }
-    .social button.apple { background: #000; color: #fff; border-color: #000; }
-    .social button.apple:hover { background: #1b1b1b; }
-    .social svg { width: 18px; height: 18px; flex: none; }
 
-    /* 로비 */
-    .center { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
-    .lobby { width: min(680px, 100%); }
-    .lobby .greet { font-size: clamp(1.6rem, 3vw, 2.2rem); font-weight: 700; margin: 0 0 6px; letter-spacing: -.01em; }
-    .lobby .greet-sub { color: var(--ink-soft); margin: 0 0 28px; }
-    .paths { display: grid; grid-template-columns: 1.2fr 1fr; gap: 16px; }
-    @media (max-width: 620px) { .paths { grid-template-columns: 1fr; } }
-    .path { border: 1px solid var(--line); border-radius: 16px; padding: 24px; background: var(--surface); }
-    .path h3 { margin: 0 0 8px; font-size: 1.1rem; font-weight: 700; }
-    .path p { margin: 0 0 20px; font-size: .9rem; color: var(--ink-soft); }
-    .path.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
-    .path.primary p { color: #AEB6C2; }
-    .join-row { display: flex; gap: 8px; }
-    .join-row input {
-        flex: 1; min-width: 0; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line);
-        background: var(--surface); color: var(--ink); outline: none;
-        font-family: var(--mono); letter-spacing: .14em;
-    }
-    .join-row input:focus { border-color: var(--signal); box-shadow: 0 0 0 3px var(--signal-soft); }
-    .lobby-foot { margin-top: 24px; display: flex; justify-content: flex-end; }
-    .link-btn { background: none; border: none; color: var(--ink-soft); font-size: .9rem; padding: 6px; }
-    .link-btn:hover { color: var(--ink); text-decoration: underline; }
-
-    /* 앱 헤더 (로그인 이후 공통) */
-    .appbar { background: var(--surface); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 10; }
-    .appbar-inner { max-width: 1100px; margin: 0 auto; padding: 12px 20px; display: flex; align-items: center; gap: 18px; }
-    .brand-btn { background: none; border: none; font-weight: 800; font-size: 1.15rem; color: var(--ink); letter-spacing: -.01em; padding: 4px; }
-    .topnav { display: flex; gap: 4px; }
-    .navlink { background: none; border: none; padding: 8px 12px; border-radius: 8px; color: var(--ink-soft); font-weight: 600; font-size: .92rem; }
-    .navlink:hover { background: var(--paper); color: var(--ink); }
-    .navlink.active { color: var(--signal); background: var(--signal-soft); }
+    /* 앱 헤더 */
+    .appbar { position: sticky; top: 0; z-index: 10; background: rgba(241, 242, 238, .9); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+    .appbar-inner { max-width: 1040px; margin: 0 auto; padding: 10px 20px; display: flex; align-items: center; gap: 20px; }
+    .wordmark-btn { background: none; border: 0; padding: 4px; }
+    .topnav { display: flex; gap: 2px; }
+    .navlink { background: none; border: 0; padding: 8px 12px; border-radius: 10px; color: var(--ink-2); font-weight: 650; font-size: 15px; }
+    .navlink:hover { color: var(--ink); }
+    .navlink.active { color: var(--ink); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
     .userchip { margin-left: auto; display: flex; align-items: center; gap: 10px; }
-    .avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--signal); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: .9rem; flex: none; }
-    .avatar.lg { width: 56px; height: 56px; font-size: 1.4rem; }
-    .uname { font-weight: 600; font-size: .92rem; }
+    .uname { font-weight: 650; font-size: 15px; }
     @media (max-width: 560px) { .uname { display: none; } }
 
-    /* 콘텐츠 페이지 (홈 / 마이페이지) */
-    .page { max-width: 1100px; margin: 0 auto; padding: 32px 20px 56px; }
-    .page-title { font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 700; margin: 0 0 24px; letter-spacing: -.01em; }
-    .section-head { display: flex; align-items: baseline; justify-content: space-between; margin: 36px 0 14px; }
-    .section-head h2 { font-size: 1.15rem; font-weight: 700; margin: 0; }
+    /* 홈 */
+    .page { max-width: 1040px; margin: 0 auto; padding: 40px 20px 64px; }
+    .page-narrow { max-width: 640px; }
+    .greet { font-size: clamp(28px, 3.4vw, 38px); font-weight: 800; letter-spacing: -.02em; line-height: 1.25; }
+    .greet-sub { margin: 6px 0 28px; color: var(--ink-2); }
+    .paths { display: grid; grid-template-columns: 1.25fr 1fr; gap: 14px; }
+    @media (max-width: 680px) { .paths { grid-template-columns: 1fr; } }
+    .path { padding: 26px; border-radius: 20px; background: var(--surface); border: 1px solid var(--line); display: flex; flex-direction: column; }
+    .path h2 { font-size: 19px; font-weight: 750; }
+    .path p { margin: 6px 0 22px; color: var(--ink-2); font-size: 15px; flex: 1; }
+    .path-new { background: var(--ink); border-color: var(--ink); color: #fff; }
+    .path-new p { color: #B4BAC1; }
+    .join-row { display: flex; gap: 8px; }
+    .code-input { flex: 1; min-width: 0; letter-spacing: .12em; }
 
-    /* 회의 목록 */
-    .meeting-list { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--surface); }
-    .ml-row { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
-    .ml-row:last-child { border-bottom: none; }
-    .ml-live { font-size: .72rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: var(--paper); color: var(--ink-soft); flex: none; }
-    .ml-live.on { background: rgba(15, 169, 104, .12); color: var(--live); }
-    .ml-code { font-family: var(--mono); font-size: 1rem; letter-spacing: .1em; }
-    .ml-host { color: var(--ink-soft); font-size: .9rem; }
-    .ml-count { margin-left: auto; color: var(--ink-soft); font-size: .88rem; }
-    .ml-row .btn { padding: 8px 14px; font-size: 14px; }
-    .ml-empty { padding: 28px 16px; text-align: center; color: var(--ink-soft); font-size: .92rem; }
+    .section-head { display: flex; align-items: baseline; justify-content: space-between; margin: 28px 0 12px; }
+    .section-head h2 { font-size: 18px; font-weight: 750; }
+    .ml { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+    .ml-row { display: flex; align-items: center; gap: 14px; padding: 12px 16px; }
+    .ml-row + .ml-row { border-top: 1px solid var(--line); }
+    .ml-live { flex: none; padding: 3px 10px; border-radius: 999px; background: var(--paper); color: var(--ink-2); font-size: 12px; font-weight: 700; }
+    .ml-live.on { background: rgba(30, 158, 99, .12); color: var(--live); }
+    .ml-code { font-weight: 700; letter-spacing: .1em; }
+    .ml-host, .ml-count { color: var(--ink-2); font-size: 14px; }
+    .ml-count { margin-left: auto; }
+    @media (max-width: 560px) { .ml-host { display: none; } }
+    .ml-empty { padding: 28px 16px; text-align: center; color: var(--ink-2); font-size: 15px; background: var(--surface); border: 1px dashed var(--line); border-radius: 16px; }
 
     /* 마이페이지 */
-    .profile { display: flex; align-items: center; gap: 16px; padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
-    .profile-name { font-size: 1.25rem; font-weight: 700; }
-    .profile-meta { color: var(--ink-soft); font-size: .9rem; margin-top: 2px; }
-    .info-list { margin-top: 18px; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: var(--surface); }
-    .info-row { display: flex; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--line); font-size: .95rem; }
-    .info-row:last-child { border-bottom: none; }
-    .info-row .k { color: var(--ink-soft); }
-    .settings { margin-top: 18px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); padding: 2px 18px; }
-    .settings h3 { font-size: 1rem; margin: 16px 0 8px; }
-    .setting { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; font-size: .95rem; }
-    .setting input { width: 20px; height: 20px; accent-color: var(--signal); }
+    .page-title { font-size: clamp(26px, 3vw, 32px); font-weight: 800; letter-spacing: -.02em; margin-bottom: 22px; }
+    .profile { display: flex; align-items: center; gap: 16px; }
+    .profile-name { font-size: 21px; font-weight: 750; }
+    .profile-meta { color: var(--ink-2); font-size: 15px; }
+    .info { margin: 24px 0 0; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
+    .info > div { display: flex; justify-content: space-between; gap: 16px; padding: 14px 18px; }
+    .info > div + div { border-top: 1px solid var(--line); }
+    .info dt { color: var(--ink-2); }
+    .info dd { margin: 0; font-weight: 600; }
+    .sub-title { margin: 32px 0 10px; font-size: 18px; font-weight: 750; }
+    .setting { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; cursor: pointer; }
+    .switch {
+        appearance: none; flex: none; margin: 0; width: 46px; height: 28px; border-radius: 999px;
+        background: #C9CCC5; position: relative; cursor: pointer; transition: background .15s;
+    }
+    .switch::after {
+        content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%;
+        background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .25); transition: transform .15s;
+    }
+    .switch:checked { background: var(--ink); }
+    .switch:checked::after { transform: translateX(18px); }
 
-    /* 룸 */
-    .room { min-height: 100vh; display: flex; flex-direction: column; }
-    .room-top {
-        display: flex; align-items: center; justify-content: space-between; gap: 16px;
-        padding: 14px 20px; background: var(--surface); border-bottom: 1px solid var(--line);
-        flex-wrap: wrap; position: sticky; top: 0; z-index: 5;
-    }
-    .room-id { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-    .conn { display: inline-flex; align-items: center; gap: 7px; font-size: .85rem; color: var(--ink-soft); font-weight: 600; }
-    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--live); box-shadow: 0 0 0 4px rgba(15, 169, 104, .15); }
-    .codechip { display: inline-flex; align-items: center; gap: 8px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 7px 8px 7px 12px; }
-    .codechip .label { font-size: .75rem; color: var(--ink-soft); font-weight: 600; }
-    .codechip code { font-family: var(--mono); font-size: 1rem; letter-spacing: .12em; color: var(--ink); }
-    .copy { border: none; background: none; padding: 5px; border-radius: 6px; color: var(--ink-soft); display: inline-flex; }
-    .copy:hover { background: var(--line); color: var(--ink); }
-    .copy.copied { color: var(--live); }
-    .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .controls .btn { padding: 10px 14px; font-size: 14px; }
-    .toggle {
-        display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 10px;
-        border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-weight: 600; font-size: 14px;
-    }
-    .toggle .badge { width: 9px; height: 9px; border-radius: 50%; background: #C4C9D2; }
-    .toggle.on { border-color: var(--live); color: var(--live); }
-    .toggle.on .badge { background: var(--live); box-shadow: 0 0 0 3px rgba(15, 169, 104, .2); }
+    /* 회의실 */
+    .room { min-height: 100vh; display: flex; flex-direction: column; background: var(--stage); color: #fff; }
+    .room-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px 20px; }
+    .conn { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: #C3C8CE; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--live); box-shadow: 0 0 0 4px rgba(30, 158, 99, .25); }
+    .codechip { display: inline-flex; align-items: center; gap: 10px; padding: 5px 5px 5px 14px; border-radius: 12px; background: rgba(255, 255, 255, .07); }
+    .codechip-label { font-size: 13px; color: #9AA1A9; }
+    .codechip-code { font-weight: 700; letter-spacing: .12em; }
+    .copy { border: 0; padding: 6px 12px; border-radius: 8px; background: rgba(255, 255, 255, .1); font-size: 13px; font-weight: 650; }
+    .copy:hover { background: rgba(255, 255, 255, .18); }
+    .copy.copied { background: var(--caption); color: var(--ink); }
+    .room :focus-visible { outline-color: var(--caption); }
 
-    .grid {
-        display: grid; gap: 16px; padding: 20px; width: 100%;
-        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-        max-width: 1280px; margin: 0 auto;
+    .stage {
+        flex: 1; width: 100%; max-width: 1400px; margin: 0 auto; padding: 8px 20px 110px;
+        display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); align-content: center;
     }
-    .tile {
-        position: relative; background: #0C0E12; border-radius: 16px; overflow: hidden;
-        aspect-ratio: 4 / 3; box-shadow: 0 1px 3px rgba(20, 24, 30, .08);
-    }
+    .stage.solo { grid-template-columns: minmax(0, 880px); justify-content: center; }
+    .tile { position: relative; margin: 0; aspect-ratio: 4 / 3; border-radius: 20px; overflow: hidden; background: #0E1012; }
     .tile video { width: 100%; height: 100%; object-fit: cover; display: block; }
     .tile.local video { transform: scaleX(-1); }
-    .tile .name {
-        position: absolute; top: 12px; left: 12px; padding: 5px 11px; border-radius: 8px;
-        background: rgba(12, 14, 18, .7); color: #fff; font-size: .82rem; font-weight: 600; backdrop-filter: blur(8px);
+    .tile-wait { position: absolute; inset: 0; display: grid; place-items: center; color: #80878F; font-size: 15px; }
+    .waiting { text-align: center; color: #9AA1A9; font-size: 15px; }
+    .waiting b { color: #fff; letter-spacing: .1em; }
+
+    .dock {
+        position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 5;
+        display: flex; gap: 8px; padding: 8px; border-radius: 18px; flex-wrap: wrap; justify-content: center;
+        background: rgba(40, 44, 49, .92); backdrop-filter: blur(12px); box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+        width: max-content; max-width: calc(100% - 24px);
     }
-    .tile .caption {
-        position: absolute; left: 0; right: 0; bottom: 0; padding: 16px 16px 14px;
-        background: linear-gradient(transparent, rgba(12, 14, 18, .92) 42%);
-        color: #fff; font-size: clamp(1.1rem, 1.6vw, 1.5rem); font-weight: 600; line-height: 1.35; word-break: break-all;
+    .pill {
+        display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 12px;
+        border: 0; background: rgba(255, 255, 255, .08); color: #fff; font-size: 14px; font-weight: 650; white-space: nowrap;
     }
-    .tile .caption:empty { display: none; }
+    .pill:hover { background: rgba(255, 255, 255, .16); }
+    .pill-dot { width: 9px; height: 9px; border-radius: 50%; background: #6B7178; }
+    .pill.on { background: var(--caption); color: var(--ink); }
+    .pill.on .pill-dot { background: var(--ink); }
+    .pill-select span { color: #9AA1A9; }
+    .pill-select select { appearance: none; background: none; border: 0; padding: 0 16px 0 0; font-weight: 650; cursor: pointer;
+        background-image: linear-gradient(45deg, transparent 50%, #fff 50%), linear-gradient(135deg, #fff 50%, transparent 50%);
+        background-position: right 5px center, right 0 center; background-size: 5px 5px; background-repeat: no-repeat; }
+    .pill-select select option { color: var(--ink); }
+    .pill-leave { background: var(--danger); }
+    .pill-leave:hover { background: #E5554A; }
 </style>
 </head>
 <body>
-
-<!-- 로그인 이후 공통 헤더 -->
-<header id="appHeader" class="appbar" hidden>
-    <div class="appbar-inner">
-        <button class="brand-btn" data-nav="lobbyScreen">SORI</button>
-        <nav class="topnav">
-            <button class="navlink" data-nav="lobbyScreen">홈</button>
-            <button class="navlink" data-nav="mypageScreen">마이페이지</button>
-        </nav>
-        <div class="userchip">
-            <span class="avatar" id="userAvatar">U</span>
-            <span class="uname" id="userName">사용자</span>
-            <button id="logoutBtn" class="link-btn">로그아웃</button>
-        </div>
-    </div>
-</header>
-
-<!-- 1. 로그인 -->
-<section id="loginScreen" class="screen active">
-    <div class="login">
-        <div class="login-hero">
-            <div class="brandmark">소리(SORI) · 수어 화상회의</div>
-            <div class="hero-copy">
-                <h1>수어로 말하고,<br>글자로 전해지는 대화</h1>
-                <div class="reveal" aria-hidden="true">
-                    <span class="j j1">ㄱ</span>
-                    <span class="j j2">ㅜ</span>
-                    <span class="arrow">→</span>
-                    <span class="result">구</span>
-                </div>
-                <p>손 모양을 실시간으로 한글 자막으로 바꿉니다. 들리지 않아도 대화는 이어집니다.</p>
-            </div>
-            <div class="brandmark" style="color:#6B7280">실시간 지문자 인식 · 화상 통화</div>
-        </div>
-        <div class="login-form">
-            <div class="box">
-                <h2>로그인</h2>
-                <p class="lead">회의를 열거나 코드로 참여하려면 로그인하세요.</p>
-                <form id="loginForm">
-                    <div class="field">
-                        <label for="username">아이디</label>
-                        <input id="username" autocomplete="username" value="demo">
-                    </div>
-                    <div class="field">
-                        <label for="password">비밀번호</label>
-                        <input id="password" type="password" autocomplete="current-password" value="demo">
-                    </div>
-                    <button class="btn block" type="submit">로그인</button>
-                </form>
-                <div id="loginMsg" class="msg"></div>
-                <div class="sep">또는</div>
-                <div class="social">
-                    <button type="button" class="google" data-provider="Google">
-                        <svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-                        Google로 계속하기
-                    </button>
-                    <button type="button" class="apple" data-provider="Apple">
-                        <svg viewBox="0 0 384 512" fill="currentColor" aria-hidden="true"><path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/></svg>
-                        Apple로 계속하기
-                    </button>
-                </div>
-                <div class="hint">체험 계정: demo / demo, alice / 1234, bob / 1234</div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- 2. 홈 -->
-<section id="lobbyScreen" class="screen">
-    <div class="page">
-        <h1 class="greet" id="lobbyGreeting">환영합니다</h1>
-        <p class="greet-sub">새 회의를 열거나, 받은 코드로 참여하세요.</p>
-        <div class="paths">
-            <div class="path primary">
-                <h3>새 회의 시작</h3>
-                <p>방을 만들고 코드를 공유하면 바로 통화가 열립니다.</p>
-                <button id="createBtn" class="btn block">새 회의 시작</button>
-            </div>
-            <div class="path">
-                <h3>코드로 참여</h3>
-                <p>받은 회의 코드를 입력하세요.</p>
-                <div class="join-row">
-                    <input id="joinCode" placeholder="a1b2c3" autocapitalize="off" spellcheck="false">
-                    <button id="joinBtn" class="btn ghost">참여</button>
-                </div>
-            </div>
-        </div>
-        <div id="lobbyMsg" class="msg"></div>
-        <div class="section-head">
-            <h2>회의 목록</h2>
-            <button id="refreshMeetings" class="link-btn">새로고침</button>
-        </div>
-        <div id="meetingList" class="meeting-list"></div>
-    </div>
-</section>
-
-<!-- 2-2. 마이페이지 -->
-<section id="mypageScreen" class="screen">
-    <div class="page">
-        <h1 class="page-title">마이페이지</h1>
-        <div class="profile">
-            <span class="avatar lg" id="profileAvatar">U</span>
-            <div>
-                <div class="profile-name" id="profileName">사용자</div>
-                <div class="profile-meta" id="profileMeta">@user · 체험 계정</div>
-            </div>
-        </div>
-        <div class="info-list">
-            <div class="info-row"><span class="k">아이디</span><span id="acctId">user</span></div>
-            <div class="info-row"><span class="k">계정 유형</span><span>체험 계정</span></div>
-            <div class="info-row"><span class="k">가입일</span><span>2026. 11. 5.</span></div>
-        </div>
-        <div class="settings">
-            <h3>환경 설정</h3>
-            <label class="setting">
-                <span>회의 입장 시 수어 자막 켜기</span>
-                <input type="checkbox" id="prefSign" checked>
-            </label>
-        </div>
-    </div>
-</section>
-
-<!-- 3. 룸 -->
-<section id="roomScreen" class="screen">
-    <div class="room">
-        <div class="room-top">
-            <div class="room-id">
-                <span class="conn"><span class="dot"></span>연결됨</span>
-                <span class="codechip">
-                    <span class="label">회의 코드</span>
-                    <code id="roomCode">-</code>
-                    <button id="copyCode" class="copy" title="코드 복사" aria-label="회의 코드 복사">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                    </button>
-                </span>
-            </div>
-            <div class="controls">
-                <button id="signToggle" class="toggle on"><span id="signBadge" class="badge"></span>수어 자막</button>
-                <select id="signModel" class="toggle" aria-label="수어 인식 모델">
-                    <option value="v1">모델 v1 (기존)</option>
-                    <option value="v2">모델 v2 (11/17)</option>
-                </select>
-                <button id="clearCaption" class="btn ghost">자막 지우기</button>
-                <button id="leaveBtn" class="btn danger">나가기</button>
-            </div>
-        </div>
-        <div id="videoGrid" class="grid"></div>
-    </div>
-</section>
-
-<script>
-// ---------- 상태 ----------
-let currentUser = null;
-let currentRole = "user";
-let authToken = null;       // 탭마다 메모리에만 둔다: 탭 두 개로 다른 계정 로그인 가능
-let localStream = null;
-let roomSocket = null;      // 시그널링 WebSocket
-let signalQueue = Promise.resolve();
-let signSocket = null;      // 수어 인식 WebSocket (/ws/sign)
-let signTimer = null;
-let signBusy = false;
-let signEnabled = localStorage.getItem("pref.signDefault") !== "0";  // 기본 켜짐
-let signModel = localStorage.getItem("pref.signModel") === "v2" ? "v2" : "v1";  // 지문자 모델, 기본 v1
-let myPeerId = null;
-// 자모 확정용 디바운스 상태(손 바꾸는 중 잠깐 잡힌 건 버린다)
-let heldAction = null, heldSince = 0, committedCurrent = false;
-let lastSeen = 0, spacedThisRelease = false;
-const HOLD_MS = 250;    // 이 시간 이상 같은 자모가 유지돼야 확정
-const SPACE_MS = 1500;  // 손을 이만큼 내리고 있으면 띄어쓰기
-const peers = new Map();    // peerId -> RTCPeerConnection
-const names = new Map();    // peerId -> 이름
-const RTC_CONFIG = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
-
-// ---------- 한글 자모 결합 오토마타 ----------
-const CHO  = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
-const JUNG = ['ㅏ','ㅐ','ㅑ','ㅒ','ㅓ','ㅔ','ㅕ','ㅖ','ㅗ','ㅘ','ㅙ','ㅚ','ㅛ','ㅜ','ㅝ','ㅞ','ㅟ','ㅠ','ㅡ','ㅢ','ㅣ'];
-const JONG = ['','ㄱ','ㄲ','ㄳ','ㄴ','ㄵ','ㄶ','ㄷ','ㄹ','ㄺ','ㄻ','ㄼ','ㄽ','ㄾ','ㄿ','ㅀ','ㅁ','ㅂ','ㅄ','ㅅ','ㅆ','ㅇ','ㅈ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
-// 모델이 ㅘㅙㅝㅞ를 직접 못 내므로 기본 모음 두 개로 조합해 만든다
-const V_COMBINE = {'ㅗㅏ':'ㅘ','ㅗㅐ':'ㅙ','ㅗㅣ':'ㅚ','ㅜㅓ':'ㅝ','ㅜㅔ':'ㅞ','ㅜㅣ':'ㅟ','ㅡㅣ':'ㅢ'};
-const T_COMBINE = {'ㄱㅅ':'ㄳ','ㄴㅈ':'ㄵ','ㄴㅎ':'ㄶ','ㄹㄱ':'ㄺ','ㄹㅁ':'ㄻ','ㄹㅂ':'ㄼ','ㄹㅅ':'ㄽ','ㄹㅌ':'ㄾ','ㄹㅍ':'ㄿ','ㄹㅎ':'ㅀ','ㅂㅅ':'ㅄ'};
-const T_SPLIT = {'ㄳ':['ㄱ','ㅅ'],'ㄵ':['ㄴ','ㅈ'],'ㄶ':['ㄴ','ㅎ'],'ㄺ':['ㄹ','ㄱ'],'ㄻ':['ㄹ','ㅁ'],'ㄼ':['ㄹ','ㅂ'],'ㄽ':['ㄹ','ㅅ'],'ㄾ':['ㄹ','ㅌ'],'ㄿ':['ㄹ','ㅍ'],'ㅀ':['ㄹ','ㅎ'],'ㅄ':['ㅂ','ㅅ']};
-// 뜻 예측(최소): 모음 자리에 모음이 또 오면 앞 모음을 닮은 자음으로 재해석(ㅜㅜ→구).
-// shortcut: 관측된 혼동쌍만 1:1 매핑. 오인식이 늘면 사전/빈도 기반 단어 예측으로 올린다.
-const V_TO_C = {'ㅜ':'ㄱ'};
-
-class Hangul {
-    constructor(){ this.out=''; this.c=-1; this.v=-1; this.t=0; }  // 초성/중성/종성 인덱스(t=0: 받침 없음)
-    reset(){ this.out=''; this.c=-1; this.v=-1; this.t=0; }
-    _render(){
-        if (this.c>=0 && this.v>=0) return String.fromCharCode(0xAC00 + (this.c*21 + this.v)*28 + this.t);
-        if (this.c>=0) return CHO[this.c];
-        if (this.v>=0) return JUNG[this.v];
-        return '';
-    }
-    _flush(){ this.out += this._render(); this.c=-1; this.v=-1; this.t=0; }
-    text(){ return this.out + this._render(); }
-    space(){ this._flush(); if (this.out && !this.out.endsWith(' ')) this.out += ' '; }
-    input(j){
-        const ci = CHO.indexOf(j), vi = JUNG.indexOf(j), ti = JONG.indexOf(j);
-        const isV = vi >= 0;
-        if (this.c<0 && this.v<0){ if (isV) this.v=vi; else this.c=ci; return; }
-        if (isV){
-            if (this.v<0){ this.v=vi; }                          // 초성만 있음 → 중성 결합
-            else if (this.t===0){
-                const comb = V_COMBINE[JUNG[this.v]+j];
-                if (comb){ this.v = JUNG.indexOf(comb); }          // 복합모음
-                else if (this.c<0 && V_TO_C[JUNG[this.v]]){        // 혼동 보정
-                    this.c = CHO.indexOf(V_TO_C[JUNG[this.v]]); this.v = vi;
-                } else { this._flush(); this.v = vi; }            // 새 음절(단독 모음)
-            } else {                                              // 받침을 다음 음절 초성으로 넘김
-                const split = T_SPLIT[JONG[this.t]];
-                let moved;
-                if (split){ moved = split[1]; this.t = JONG.indexOf(split[0]); }
-                else { moved = JONG[this.t]; this.t = 0; }
-                this._flush(); this.c = CHO.indexOf(moved); this.v = vi;
-            }
-            return;
-        }
-        if (this.v<0){ this._flush(); this.c = ci; }              // 자음 뒤 자음 → 분리
-        else if (this.t===0){ if (ti>=0) this.t = ti; else { this._flush(); this.c = ci; } }
-        else {
-            const comb = T_COMBINE[JONG[this.t]+j];
-            if (comb) this.t = JONG.indexOf(comb);                // 겹받침
-            else { this._flush(); this.c = ci; }
-        }
-    }
-}
-
-const composer = new Hangul();
-
-// 내 자막은 내 화면에 띄우지 않고 다른 참가자에게만 전송
-function publishCaption(){
-    const txt = composer.text();
-    // 수어 하는 사람도 자기 영상 아래에서 인식 결과를 본다
-    const own = document.getElementById("cap-local");
-    if (own) own.textContent = txt;
-    if (roomSocket && roomSocket.readyState === WebSocket.OPEN)
-        roomSocket.send(JSON.stringify({ type: "caption", text: txt }));
-}
-
-// 간단 자체 점검: 주소에 ?selftest 를 붙이면 콘솔에서 결과 확인
-if (location.search.includes("selftest")){
-    const run = (seq) => { const h=new Hangul(); for(const j of seq) h.input(j); return h.text(); };
-    const cases = [[['ㅎ','ㅏ','ㄴ','ㄱ','ㅡ','ㄹ'],'한글'],[['ㅜ','ㅜ'],'구'],
-        [['ㄱ','ㅏ','ㄴ','ㅏ'],'가나'],[['ㄱ','ㅗ','ㅏ'],'과'],[['ㅇ','ㅏ','ㄴ','ㄴ','ㅕ','ㅇ'],'안녕']];
-    for (const [s,e] of cases){ const g=run(s); console.assert(g===e, `자모조합 실패 ${s.join('')} -> ${g} (기대 ${e})`); }
-    console.log("자모 조합 자체 점검 완료");
-}
-
-// ---------- 화면 전환 ----------
-function show(id) {
-    document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
-    document.getElementById(id).classList.add("active");
-
-    // 헤더는 홈/마이페이지에서만 보인다
-    document.getElementById("appHeader").hidden = !(id === "lobbyScreen" || id === "mypageScreen");
-    document.querySelectorAll(".navlink").forEach(n => n.classList.toggle("active", n.dataset.nav === id));
-
-    if (id === "lobbyScreen") loadMeetings();
-    if (id === "mypageScreen") fillMypage();
-}
-
-// 세션 토큰을 붙여 API 호출. 401이면 세션이 끝난 것(서버 재시작 등)이라 로그인 화면으로 보낸다
-async function api(path, opts = {}) {
-    const res = await fetch(path, { ...opts, headers: { ...(opts.headers || {}), Authorization: `Bearer ${authToken}` } });
-    if (res.status === 401) {
-        endSession("세션이 만료되었습니다. 다시 로그인하세요.");
-        throw new Error("unauthorized");
-    }
-    return res;
-}
-
-function endSession(message = "") {
-    authToken = null;
-    currentUser = null;
-    show("loginScreen");
-    document.getElementById("loginMsg").textContent = message;
-}
-
-function setUser(name, role) {
-    currentUser = name;
-    currentRole = role;
-    const initial = (name[0] || "U").toUpperCase();
-    document.getElementById("userName").textContent = name;
-    document.getElementById("userAvatar").textContent = initial;
-    document.getElementById("lobbyGreeting").textContent = `${name} 님, 환영합니다`;
-}
-
-async function loadMeetings() {
-    const wrap = document.getElementById("meetingList");
-    wrap.innerHTML = '<div class="ml-empty">불러오는 중…</div>';
-    try {
-        const res = await api("/api/meetings");
-        const items = (await res.json()).meetings || [];
-        if (!items.length) {
-            wrap.innerHTML = '<div class="ml-empty">아직 열린 회의가 없어요. 새 회의를 시작해 보세요.</div>';
-            return;
-        }
-        wrap.innerHTML = "";
-        for (const m of items) {
-            const row = document.createElement("div");
-            row.className = "ml-row";
-            row.innerHTML =
-                `<span class="ml-live ${m.live ? "on" : ""}">${m.live ? "진행 중" : "종료"}</span>` +
-                `<code class="ml-code">${escapeHtml(m.code)}</code>` +
-                `<span class="ml-host">개설자 ${escapeHtml(m.host)}</span>` +
-                `<span class="ml-count">${m.participants}명 참여</span>` +
-                `<button class="btn ghost" data-code="${escapeHtml(m.code)}">참여</button>`;
-            row.querySelector("button").addEventListener("click", () => enterRoom(m.code));
-            wrap.appendChild(row);
-        }
-    } catch (e) {
-        wrap.innerHTML = '<div class="ml-empty">목록을 불러오지 못했습니다.</div>';
-    }
-}
-
-function fillMypage() {
-    const name = currentUser || "사용자";
-    document.getElementById("profileAvatar").textContent = (name[0] || "U").toUpperCase();
-    document.getElementById("profileName").textContent = name;
-    document.getElementById("profileMeta").textContent = `@${name} · ${currentRole === "admin" ? "관리자 계정" : "체험 계정"}`;
-    document.getElementById("acctId").textContent = name;
-    document.getElementById("prefSign").checked = signEnabled;
-}
-
-// ---------- 로그인 ----------
-document.getElementById("loginForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const username = document.getElementById("username").value.trim();
-    const password = document.getElementById("password").value;
-    const msg = document.getElementById("loginMsg");
-    msg.textContent = ""; msg.className = "msg";
-    try {
-        const res = await fetch("/api/login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username, password }),
-        });
-        const data = await res.json();
-        if (!res.ok || !data.ok) {
-            msg.textContent = data.error || "로그인에 실패했습니다.";
-            return;
-        }
-        authToken = data.token;
-        setUser(data.name, data.role);
-        show("lobbyScreen");
-    } catch (err) {
-        msg.textContent = "서버에 연결할 수 없습니다.";
-    }
-});
-
-// ---------- 로비 ----------
-document.getElementById("createBtn").addEventListener("click", async () => {
-    const msg = document.getElementById("lobbyMsg");
-    msg.textContent = "";
-    try {
-        const res = await api("/api/meetings", { method: "POST" });
-        const data = await res.json();
-        enterRoom(data.code);
-    } catch (err) {
-        msg.textContent = "회의를 개설할 수 없습니다.";
-    }
-});
-
-document.getElementById("joinBtn").addEventListener("click", async () => {
-    const code = document.getElementById("joinCode").value.trim();
-    const msg = document.getElementById("lobbyMsg");
-    msg.textContent = "";
-    if (!code) { msg.textContent = "회의 코드를 입력하세요."; return; }
-    try {
-        const res = await api(`/api/meetings/${encodeURIComponent(code)}`);
-        if (!res.ok) { msg.textContent = "존재하지 않는 회의 코드입니다."; return; }
-        enterRoom(code);
-    } catch (err) {
-        msg.textContent = "서버에 연결할 수 없습니다.";
-    }
-});
-
-document.getElementById("logoutBtn").addEventListener("click", () => {
-    fetch("/api/logout", { method: "POST", headers: { Authorization: `Bearer ${authToken}` } }).catch(() => {});
-    endSession();
-});
-
-// ---------- 룸 입장 ----------
-async function enterRoom(code) {
-    try {
-        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    } catch (err) {
-        document.getElementById("lobbyMsg").textContent = "카메라/마이크 권한이 필요합니다.";
-        return;
-    }
-
-    document.getElementById("roomCode").textContent = code;
-    document.getElementById("videoGrid").innerHTML = "";
-    composer.reset();
-    heldAction = null; committedCurrent = false; spacedThisRelease = false;
-    addTile("local", `${currentUser} (나)`, localStream, true);
-    document.getElementById("signToggle").classList.toggle("on", signEnabled);
-    show("roomScreen");
-
-    connectRoomSocket(code);
-    if (signEnabled) startSign();
-}
-
-// ---------- 비디오 타일 ----------
-function addTile(id, name, stream, muted) {
-    const tile = document.createElement("div");
-    tile.className = "tile" + (id === "local" ? " local" : "");
-    tile.id = "tile-" + id;
-    tile.innerHTML =
-        `<video autoplay playsinline ${muted ? "muted" : ""}></video>` +
-        `<div class="name">${escapeHtml(name)}</div>` +
-        `<div class="caption" id="cap-${id}"></div>`;
-    document.getElementById("videoGrid").appendChild(tile);
-    if (stream) tile.querySelector("video").srcObject = stream;
-}
-
-// 상대 타일은 입장 알림을 받자마자 만든다. 영상(WebRTC) 연결이 늦거나 실패해도 상대 자막은 보여야 한다
-function ensureTile(id, name) {
-    if (!document.getElementById("tile-" + id)) addTile(id, name || "참가자", null, false);
-}
-
-function removeTile(id) {
-    const tile = document.getElementById("tile-" + id);
-    if (tile) tile.remove();
-}
-
-function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, c =>
-        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-}
-
-// ---------- 시그널링 WebSocket ----------
-function connectRoomSocket(code) {
-    const proto = location.protocol === "https:" ? "wss:" : "ws:";
-    const url = `${proto}//${location.host}/ws/room/${encodeURIComponent(code)}?token=${encodeURIComponent(authToken)}`;
-    roomSocket = new WebSocket(url);
-
-    roomSocket.onmessage = async (event) => {
-        const msg = JSON.parse(event.data);
-        if (msg.type === "welcome") {
-            myPeerId = msg.peerId;
-            // 기존 참가자들에게 내가 먼저 연결을 건다(offer 발신)
-            for (const p of msg.peers) {
-                names.set(p.peerId, p.name);
-                ensureTile(p.peerId, p.name);
-                createPeer(p.peerId, p.name, true);
-            }
-        } else if (msg.type === "peer-joined") {
-            // 새 참가자는 자기가 offer를 보내 온다. 여기서는 이름만 기억.
-            names.set(msg.peerId, msg.name);
-            ensureTile(msg.peerId, msg.name);
-        } else if (msg.type === "signal") {
-            // 시그널은 도착 순서대로 하나씩 처리한다. 동시에 처리하면 offer 적용이 끝나기 전에
-            // 도착한 ICE 후보가 버려져 다른 네트워크끼리 연결이 안 된다
-            signalQueue = signalQueue.then(() => handleSignal(msg.from, msg.data)).catch(console.error);
-        } else if (msg.type === "caption") {
-            const cap = document.getElementById("cap-" + msg.from);
-            if (cap) cap.textContent = msg.text;
-        } else if (msg.type === "peer-left") {
-            const pc = peers.get(msg.peerId);
-            if (pc) pc.close();
-            peers.delete(msg.peerId);
-            names.delete(msg.peerId);
-            removeTile(msg.peerId);
-        }
-    };
-}
-
-function sendSignal(to, data) {
-    if (roomSocket && roomSocket.readyState === WebSocket.OPEN) {
-        roomSocket.send(JSON.stringify({ type: "signal", to, data }));
-    }
-}
-
-// ---------- WebRTC ----------
-function createPeer(peerId, name, isInitiator) {
-    const pc = new RTCPeerConnection(RTC_CONFIG);
-    peers.set(peerId, pc);
-
-    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-
-    pc.onicecandidate = (e) => {
-        if (e.candidate) sendSignal(peerId, { candidate: e.candidate });
-    };
-
-    pc.ontrack = (e) => {
-        if (!document.getElementById("tile-" + peerId)) {
-            addTile(peerId, names.get(peerId) || "참가자", e.streams[0], false);
-        } else {
-            document.querySelector("#tile-" + peerId + " video").srcObject = e.streams[0];
-        }
-    };
-
-    if (isInitiator) {
-        pc.createOffer()
-            .then(offer => pc.setLocalDescription(offer))
-            .then(() => sendSignal(peerId, { sdp: pc.localDescription }));
-    }
-    return pc;
-}
-
-async function handleSignal(from, data) {
-    let pc = peers.get(from);
-    if (!pc) pc = createPeer(from, names.get(from), false);
-
-    if (data.sdp) {
-        await pc.setRemoteDescription(data.sdp);
-        if (data.sdp.type === "offer") {
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            sendSignal(from, { sdp: pc.localDescription });
-        }
-    } else if (data.candidate) {
-        try { await pc.addIceCandidate(data.candidate); } catch (e) { console.warn("ICE 후보 추가 실패", e); }
-    }
-}
-
-// ---------- 수어 인식 (/ws/sign 재사용) ----------
-const actionsRe = /^[ㄱ-ㅎㅏ-ㅣ]$/;  // 자모 한 글자만 자막에 추가
-// 손 검출은 브라우저에서 하고 서버에는 랜드마크만 보낸다
-let tracker = null;
-import("/static/hands.js")
-    .then(m => m.createHandTracker())
-    .then(t => { tracker = t; })
-    .catch(error => console.error("손 검출기 로드 실패:", error));
-
-function startSign() {
-    const video = document.querySelector("#tile-local video");
-    const proto = location.protocol === "https:" ? "wss:" : "ws:";
-
-    signSocket = new WebSocket(`${proto}//${location.host}/ws/sign?model=${signModel}`);
-    signSocket.onmessage = (event) => {
-        signBusy = false;
-        const data = JSON.parse(event.data);
-        const now = performance.now();
-
-        if (!data.detected) {
-            // 손 내림: 같은 자모 다시 입력 허용, 오래 내리고 있으면 띄어쓰기 한 번
-            heldAction = null; committedCurrent = false;
-            if (!spacedThisRelease && composer.text() && (now - lastSeen) > SPACE_MS) {
-                composer.space(); publishCaption(); spacedThisRelease = true;
-            }
-            return;
-        }
-        lastSeen = now; spacedThisRelease = false;
-
-        // 안정되지 않은(전이 중) 예측은 무시 → 손 바꾸는 노이즈 제거
-        if (!data.stable || !actionsRe.test(data.action)) return;
-
-        const a = data.action;
-        if (a !== heldAction) { heldAction = a; heldSince = now; committedCurrent = false; }
-        // 같은 자모를 HOLD_MS 이상 유지했을 때 한 번만 확정
-        if (!committedCurrent && (now - heldSince) >= HOLD_MS) {
-            composer.input(a);
-            committedCurrent = true;
-            publishCaption();
-        }
-    };
-    // 서버 오류나 네트워크 문제로 끊기면 1초 뒤 다시 연결한다 (stopSign은 onclose를 지우고 닫는다)
-    signSocket.onclose = () => {
-        stopSign();
-        setTimeout(() => { if (signEnabled && localStream && !signSocket) startSign(); }, 1000);
-    };
-
-    signTimer = setInterval(() => {
-        if (!signEnabled || !localStream || video.readyState < 2 ||
-            !signSocket || signSocket.readyState !== WebSocket.OPEN || signBusy || !tracker) return;
-        signBusy = true;
-        try { signSocket.send(JSON.stringify(tracker.detect(video))); } catch (e) { signBusy = false; }
-    }, 33);  // 학습 데이터와 같은 30fps: 10프레임 창 = 0.33초
-}
-
-function stopSign() {
-    if (signTimer) { clearInterval(signTimer); signTimer = null; }
-    if (signSocket) { signSocket.onclose = null; signSocket.close(); signSocket = null; }
-    signBusy = false;
-}
-
-document.getElementById("signToggle").addEventListener("click", () => {
-    signEnabled = !signEnabled;
-    document.getElementById("signToggle").classList.toggle("on", signEnabled);
-    if (signEnabled) { if (!signSocket) startSign(); }
-    else {
-        stopSign();
-        composer.reset(); heldAction = null; committedCurrent = false;
-        publishCaption();
-    }
-});
-
-document.getElementById("clearCaption").addEventListener("click", () => {
-    composer.reset(); heldAction = null; committedCurrent = false;
-    publishCaption();
-});
-
-// ---------- 나가기 (화상통화 이탈) ----------
-function leaveRoom() {
-    stopSign();
-    peers.forEach(pc => pc.close());
-    peers.clear(); names.clear();
-    if (roomSocket) { roomSocket.onmessage = null; roomSocket.close(); roomSocket = null; }
-    if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
-    myPeerId = null;
-    document.getElementById("videoGrid").innerHTML = "";
-    show("lobbyScreen");
-}
-document.getElementById("leaveBtn").addEventListener("click", leaveRoom);
-window.addEventListener("beforeunload", () => { if (roomSocket) roomSocket.close(); });
-
-// 헤더 네비게이션 (홈 / 마이페이지 / 브랜드)
-document.querySelectorAll("[data-nav]").forEach((b) =>
-    b.addEventListener("click", () => show(b.dataset.nav)));
-
-// 회의 목록 새로고침
-document.getElementById("refreshMeetings").addEventListener("click", loadMeetings);
-
-// 환경 설정: 기본 수어 자막 on/off 저장
-document.getElementById("prefSign").addEventListener("change", (e) => {
-    signEnabled = e.target.checked;
-    localStorage.setItem("pref.signDefault", signEnabled ? "1" : "0");
-});
-
-// 수어 인식 모델: 통화 중에 바꾸면 새 모델로 다시 연결한다 (선택은 다음 통화에도 유지)
-const signModelSelect = document.getElementById("signModel");
-signModelSelect.value = signModel;
-signModelSelect.addEventListener("change", () => {
-    signModel = signModelSelect.value;
-    localStorage.setItem("pref.signModel", signModel);
-    if (signSocket) { stopSign(); startSign(); }
-});
-
-// 회의 코드 복사
-document.getElementById("copyCode").addEventListener("click", async () => {
-    const btn = document.getElementById("copyCode");
-    try { await navigator.clipboard.writeText(document.getElementById("roomCode").textContent); } catch (e) { return; }
-    btn.classList.add("copied");
-    setTimeout(() => btn.classList.remove("copied"), 1200);
-});
-
-// 소셜 로그인은 UI만 — 기능은 추후 연결
-document.querySelectorAll(".social button").forEach((b) => {
-    b.addEventListener("click", () => {
-        const msg = document.getElementById("loginMsg");
-        msg.className = "msg info";
-        msg.textContent = `${b.dataset.provider} 로그인은 준비 중이에요. 체험 계정으로 로그인해 주세요.`;
-    });
-});
-</script>
+<div id="root"></div>
+<noscript>이 앱은 JavaScript가 필요합니다.</noscript>
+<script type="module" src="/static/app.js"></script>
 </body>
 </html>

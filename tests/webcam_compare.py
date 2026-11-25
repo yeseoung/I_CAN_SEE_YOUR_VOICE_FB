@@ -2,7 +2,7 @@
 
   uv run python tests/webcam_compare.py [카메라 번호 또는 동영상 경로]   (기본 0, q 또는 Esc로 종료)
 
-브라우저(static/hands.js)처럼 좌우 반전 → MediaPipe로 랜드마크를 뽑고, 서버의 process_hands를 그대로 쓴다: 10프레임 → 확률 0.9 이상 2회 연속이면 확정.
+브라우저(static/hands.js)처럼 좌우 반전 → MediaPipe로 랜드마크를 뽑고, 서버의 process_hands를 그대로 쓴다: 10프레임 → 확률 0.9 이상 같은 글자 3회 연속이면 확정.
 창마다 손 검출기를 따로 둬서 서버의 연결 두 개와 같다. KERNIX는 KERNIX_ROOT 체크아웃 (먼저 make python-lib).
 처음 실행할 때 macOS가 터미널의 카메라 권한을 묻는다.
 """
@@ -39,8 +39,7 @@ def load():
         main.MODEL_RUNTIME = rt
         main.KNX_PATH = main.NEW_KNX_PATH  # 이 창은 서로 다른 모델 비교용: KERNIX 창은 11월 5일 모델
         models[rt] = main.initialize_model()
-        states[rt] = {"version": "v1", "detector": hm.HolisticDetector(min_detection_confidence=0.3), "seq": [], "action_seq": [],
-                      "current_action": "?", "current_conf": 0.0}
+        states[rt] = {**main.new_state("v1"), "detector": hm.HolisticDetector(min_detection_confidence=0.3)}
     return models, states
 
 

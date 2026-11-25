@@ -35,21 +35,24 @@ actions = [
 
 seq_length = 10
 
-# 사용자가 고르는 지문자 모델별 확정 기준: 확률 conf 이상 예측이 repeat번 연속 나오면,
-# 그중 확률이 가장 높은 글자로 확정한다 (연속 예측끼리 글자가 달라도 된다).
-# v2는 hearing_impaired_helper_make_model의 2026-11-17 배포 모델
+# 글자 확정은 학습 프로젝트(hearing_impaired_helper_make_model)의 로컬 웹캠과 같다:
+# 확률 conf 이상인 예측만 기록하고, 최근 REPEAT번이 모두 같은 글자면 확정한다. 직전에 확정한 글자와 다를 때만
+# 새 글자로 내보낸다 (webcam_test_model_1.py의 letter_settings, modules/jamo.py의 LetterStabilizer)
+# v2는 그 프로젝트의 2026-11-17 배포 모델, v2.1은 같은 구조에 직접 녹화 데이터를 더한 11-19 배포 모델
 MODELS = {
-    "v1": {"conf": 0.7, "repeat": 2},
-    "v2": {"conf": 0.7, "repeat": 3},
+    "v1": {"conf": 0.9},
+    "v2": {"conf": 0.8},
+    "v2.1": {"conf": 0.8},
 }
+REPEAT = 3
 
 
 def model_path(version):
     """버전과 런타임에 맞는 모델 파일. v1은 MODEL_PATH / KNX_PATH 설정을 따른다."""
 
     kernix = MODEL_RUNTIME == "kernix"
-    if version == "v2":
-        return BASE_DIR / "models" / ("multi_hand_gesture_classifier_v2." + ("knx" if kernix else "tflite"))
+    if version.startswith("v2"):
+        return BASE_DIR / "models" / (f"multi_hand_gesture_classifier_{version.replace('.', '_')}." + ("knx" if kernix else "tflite"))
     return KNX_PATH if kernix else MODEL_PATH
 
 
@@ -121,20 +124,20 @@ def parse_size(msg):
 
 
 def pick_hand(right, left, version):
-    """→ (지문자 손, 왼손이라 반전할지). v1: 오른손 우선. v2: 두 손이 보이면 손목이 더 높은 손(v2 학습 규칙)"""
+    """→ (지문자 손, 왼손이라 반전할지). v1: 오른손 우선. v2·v2.1: 두 손이 보이면 손목이 더 높은 손(v2 학습 규칙)"""
 
-    if right is None or (version == "v2" and left is not None and left[0, 1] < right[0, 1]):
+    if right is None or (version.startswith("v2") and left is not None and left[0, 1] < right[0, 1]):
         return left, left is not None
 
     return right, False
 
 
 def process_hand_landmarks(joint, mirror=False, version="v1", w=1.0, h=1.0):
-    """손 랜드마크 (21, 2) → 모델 입력 특징. v1: 55차원, v2: 55 + 뼈 길이 비율 20 = 75차원"""
+    """손 랜드마크 (21, 2) → 모델 입력 특징. v1: 55차원, v2·v2.1: 55 + 뼈 길이 비율 20 = 75차원"""
 
     joint = joint.copy()
 
-    if version == "v2":
+    if version.startswith("v2"):
         # v2는 반전하지 않은 원본 프레임의 픽셀 좌표로 학습했다. 받은 좌표는 반전 프레임 기준이라 되돌린다
         joint[:, 0] = 1.0 - joint[:, 0]
         joint *= np.array([w, h], dtype=np.float32)
@@ -147,7 +150,7 @@ def process_hand_landmarks(joint, mirror=False, version="v1", w=1.0, h=1.0):
 
     features = [vector.flatten(), angle_label.flatten()]
 
-    if version == "v2":
+    if version.startswith("v2"):
         features.append(Bone_Length_Ratio(joint))
 
     return np.concatenate(features).astype(np.float32)
@@ -192,6 +195,14 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+@app.middleware("http")
+async def no_cache(request, call_next):
+    # 브라우저가 고치기 전의 hands.js 같은 옛 파일을 쓰지 않게, 매번 서버에 바뀌었는지 물어보게 한다 (안 바뀌면 304)
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-cache"
+    return response
 
 app.mount(
     "/static",
@@ -372,6 +383,11 @@ async def room_ws(websocket: WebSocket, code: str):
         await room_broadcast(code, {"type": "peer-left", "peerId": peer_id})
 
 
+def new_state(version):
+    """WebSocket 연결 하나의 인식 상태"""
+    return {"version": version, "seq": [], "history": [], "last": None, "current_action": "?", "current_conf": 0.0}
+
+
 def process_hands(msg: dict, state: dict) -> dict:
     """
     클라이언트가 검출한 손 랜드마크 한 프레임 {"right": [[x, y]*21] | null, "left": ..., "w": 640, "h": 360}로
@@ -383,7 +399,7 @@ def process_hands(msg: dict, state: dict) -> dict:
         raise ValueError("메시지는 {\"right\", \"left\"} 객체여야 합니다.")
 
     version = state["version"]
-    w, h = parse_size(msg) if version == "v2" else (1.0, 1.0)
+    w, h = parse_size(msg) if version.startswith("v2") else (1.0, 1.0)
 
     right_hand_lmList, mirror = pick_hand(
         parse_hand(msg.get("right")),
@@ -392,9 +408,8 @@ def process_hands(msg: dict, state: dict) -> dict:
     )
 
     if right_hand_lmList is None:
-        # 손이 사라지면 연속 프레임 기록 초기화
+        # 손이 사라지면 프레임 창만 비운다 (확정 기록은 로컬 웹캠처럼 그대로 둔다)
         state["seq"].clear()
-        state["action_seq"].clear()
         state["current_action"] = "?"
         state["current_conf"] = 0.0
 
@@ -403,6 +418,7 @@ def process_hands(msg: dict, state: dict) -> dict:
             "action": "?",
             "confidence": 0.0,
             "stable": False,
+            "new": None,
         }
 
     # 랜드마크 -> 모델 입력 특징
@@ -420,6 +436,7 @@ def process_hands(msg: dict, state: dict) -> dict:
             "action": state["current_action"],
             "confidence": state["current_conf"],
             "stable": False,
+            "new": None,
             "frames_collected": len(state["seq"]),
         }
 
@@ -437,36 +454,35 @@ def process_hands(msg: dict, state: dict) -> dict:
 
     state["current_conf"] = conf
 
-    settings = MODELS[version]
+    stable, new = False, None
 
-    if conf >= settings["conf"]:
-        # (확률, 글자)로 쌓아 최근 repeat개만 둔다
-        state["action_seq"] = (state["action_seq"] + [(conf, actions[i_pred])])[-settings["repeat"]:]
-
-        # 기준 이상 예측이 repeat회 연속이면, 그중 확률이 가장 높은 글자로 확정
-        stable = len(state["action_seq"]) == settings["repeat"]
+    if conf >= MODELS[version]["conf"]:
+        letter = actions[i_pred]
+        state["history"] = (state["history"] + [letter])[-REPEAT:]
+        stable = len(state["history"]) == REPEAT and len(set(state["history"])) == 1
 
         if stable:
-            state["current_action"] = max(state["action_seq"])[1]
+            # 같은 글자를 계속 들고 있으면 한 번만 새 글자로 낸다
+            new = letter if letter != state["last"] else None
+            state["last"] = state["current_action"] = letter
 
     else:
-        # 낮은 신뢰도의 예측은 연속 일치 판정에서 제외
-        state["action_seq"].clear()
+        # 낮은 확률은 기록하지 않고 건너뛴다 (연속 기록을 끊지 않는다)
         state["current_action"] = "?"
-        stable = False
 
     return {
         "detected": True,
         "action": state["current_action"],
         "confidence": conf,
         "stable": stable,
+        "new": new,
         "frames_collected": len(state["seq"]),
     }
 
 
 @app.websocket("/ws/sign")
 async def sign_recognition(websocket: WebSocket):
-    # 사용할 지문자 모델은 접속 주소로 고른다: /ws/sign?model=v2 (기본 v1)
+    # 사용할 지문자 모델은 접속 주소로 고른다: /ws/sign?model=v2 또는 v2.1 (기본 v1)
     version = websocket.query_params.get("model", "v1")
     if version not in MODELS:
         await websocket.close(code=1008)
@@ -475,13 +491,7 @@ async def sign_recognition(websocket: WebSocket):
     await websocket.accept()
 
     # 연결마다 별도 상태 생성
-    state = {
-        "version": version,
-        "seq": [],
-        "action_seq": [],
-        "current_action": "?",
-        "current_conf": 0.0,
-    }
+    state = new_state(version)
 
     frame_id = 0
 

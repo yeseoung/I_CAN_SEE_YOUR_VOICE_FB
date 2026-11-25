@@ -56,7 +56,17 @@ Stop the server with `Ctrl+C`.
 
 ### Using other devices on your network
 
-Run with `--host 0.0.0.0` and open `http://<your-ip>:8000`. Browsers only allow camera access on `https://` or `localhost`, so other devices need HTTPS, for example through a reverse proxy or a tunnel. Meetings use a public STUN server only (no TURN), so peers behind strict NATs may fail to connect.
+Browsers only allow camera access on `https://` or `http://localhost` / `http://127.0.0.1`, so any other address (your LAN IP, `0.0.0.0`) needs HTTPS. For testing, a self-signed certificate is enough (`certs/` is git-ignored):
+
+```bash
+mkdir -p certs
+openssl req -x509 -newkey rsa:2048 -nodes -keyout certs/key.pem -out certs/cert.pem -days 365 \
+  -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:$(ipconfig getifaddr en0)"
+uv run uvicorn model_api_test.main:app --app-dir src --host 0.0.0.0 --port 8443 \
+  --ssl-keyfile certs/key.pem --ssl-certfile certs/cert.pem
+```
+
+Open `https://<your-ip>:8443` and accept the certificate warning once per browser (Chrome: **Advanced → Proceed**). `ipconfig getifaddr en0` is for macOS Wi-Fi; regenerate the certificate if your IP changes. Meetings use a public STUN server only (no TURN), so peers behind strict NATs may fail to connect.
 
 ## Optional: KERNIX runtime (Apple Silicon)
 
@@ -103,18 +113,18 @@ uv run python tests/webcam_compare.py [camera index or video file]
 | `KERNIX_ROOT` | `../../KERNIX` (relative to the repo root) | Path to a KERNIX checkout (KERNIX mode only) |
 | `KNX_PATH` | `src/model_api_test/models/multi_hand_gesture_classifier_old.knx` | Model file for KERNIX mode |
 
-### Choosing the fingerspelling model (v1 / v2)
+### Choosing the fingerspelling model (v1 / v2 / v2.1)
 
-In a meeting, each user picks the model in the call toolbar, next to the caption toggle. Switching during a call reconnects recognition with the new model, and the choice is saved in the browser. The single-user demo (`/recognition`) always uses v1. Both models are loaded at startup and run on the same `MODEL_RUNTIME`. The predictions in a row may name different letters; the letter with the highest confidence among them is confirmed. The thresholds are in `MODELS` in `src/model_api_test/main.py`.
+In a meeting, each user picks the model in the call toolbar, next to the caption toggle. Switching during a call reconnects recognition with the new model, and the choice is saved in the browser. The single-user demo (`/recognition`) always uses v1. All models are loaded at startup and run on the same `MODEL_RUNTIME`. Letters are confirmed with the same rule as the training project's local webcam test (`webcam_test_model_1.py`, `LetterStabilizer`): predictions below the threshold are skipped, and a letter is confirmed when the last 3 recorded predictions are that letter. Holding the same letter confirms it only once. The thresholds are in `MODELS` in `src/model_api_test/main.py`; `tests/test_confirm.py` checks the rule against that project's code.
 
-| | v1 (default) | v2 |
+| | v1 (default) | v2 / v2.1 |
 |---|---|---|
-| Model file | `multi_hand_gesture_classifier.tflite` / `KNX_PATH` | `multi_hand_gesture_classifier_v2.{tflite,knx}` |
+| Model file | `multi_hand_gesture_classifier.tflite` / `KNX_PATH` | `multi_hand_gesture_classifier_v2.{tflite,knx}` / `_v2_1.{tflite,knx}` |
 | Input | 10 × 55: joint directions + angles, 0–1 coordinates of the flipped frame | 10 × 75: the same 55 + bone length ratios, pixel coordinates of the unflipped frame |
 | Signing hand | Right hand, or the left hand mirrored | The higher of the two hands (left is mirrored) |
-| Confirmed when | 2 predictions in a row with confidence ≥ 0.7 | 3 predictions in a row with confidence ≥ 0.7 |
+| Confirmed when | The same letter 3 times with confidence ≥ 0.9 | The same letter 3 times with confidence ≥ 0.8 |
 
-v2 is the fingerspelling model deployed on 2026-11-17 in [I_CAN_SEE_YOUR_VOICE](https://github.com/yeseoung/I_CAN_SEE_YOUR_VOICE) (local folder `hearing_impaired_helper_make_model`) (see "지문자 v2" in its `PROGRESS.md`). On unseen signers (AI Hub CROWD 18, 19) its letter error rate is 17.9% versus 75.5% for the earlier model. That was measured on OpenPose keypoints, not on a MediaPipe webcam. `tests/test_features.py` checks that the server computes the same features as that project.
+v2 is the fingerspelling model deployed on 2026-11-17 in [I_CAN_SEE_YOUR_VOICE](https://github.com/yeseoung/I_CAN_SEE_YOUR_VOICE) (local folder `hearing_impaired_helper_make_model`) (see "지문자 v2" in its `PROGRESS.md`). On unseen signers (AI Hub CROWD 18, 19) its letter error rate is 17.9% versus 75.5% for the earlier model. That was measured on OpenPose keypoints, not on a MediaPipe webcam. v2.1 (deployed there on 2026-11-19) has the same architecture, features and settings as v2, trained with 70 extra self-recorded clips; its error rate on the same signers is 17.4%. `tests/test_features.py` checks that the server computes the same features as that project, and `tests/test_hands.py` runs the browser's hand detector (HandLandmarker, as in `static/hands.js`) on that project's letter videos to check that the signing hand reaches the server unmirrored and is recognized.
 
 ## API
 
@@ -132,7 +142,7 @@ Every endpoint except `/api/login` requires `Authorization: Bearer <token>`, usi
 
 ### WebSocket `/ws/sign`: recognition
 
-The browser detects hands itself with MediaPipe (`static/hands.js`, `@mediapipe/tasks-vision@1.1.1`, model served from `/models/hand_landmarker.task`). Pick the model with `?model=v1` (default) or `?model=v2`; any other value is refused. For each webcam frame the browser sends one **JSON** message with the 21 hand landmarks as `[x, y]` (0–1, measured on the horizontally flipped frame), or `null` when that hand is not visible, plus the size of that frame (`w`, `h`, required for v2):
+The browser detects hands itself with MediaPipe (`static/hands.js`, `@mediapipe/tasks-vision@1.1.1`, model served from `/models/hand_landmarker.task`). Pick the model with `?model=v1` (default), `?model=v2` or `?model=v2.1`; any other value is refused. For each webcam frame the browser sends one **JSON** message with the 21 hand landmarks as `[x, y]` (0–1, measured on the horizontally flipped frame), or `null` when that hand is not visible, plus the size of that frame (`w`, `h`, required for v2 and v2.1):
 
 ```json
 {"right": [[0.51, 0.72], [0.48, 0.65], ...], "left": null, "w": 640, "h": 360}
@@ -141,11 +151,12 @@ The browser detects hands itself with MediaPipe (`static/hands.js`, `@mediapipe/
 The server picks the signing hand as in the table above. Each message gets one JSON reply:
 
 ```json
-{"detected": true, "action": "ㄱ", "confidence": 0.97, "stable": true, "frames_collected": 10, "frame_id": 42}
+{"detected": true, "action": "ㄱ", "confidence": 0.97, "stable": true, "new": "ㄱ", "frames_collected": 10, "frame_id": 42}
 ```
 
-- `action` is `"?"` until a letter is confirmed.
-- Each connection gets its own 10-frame window, so several people can sign at once without mixing results. The window is cleared when the hand disappears.
+- `action` is the last confirmed letter, or `"?"` when the latest prediction is below the threshold. `stable` is true while the last 3 recorded predictions agree.
+- `new` is the letter newly confirmed by this frame, or `null`. It is not repeated while the same letter is held. The meeting app adds only `new` to the caption.
+- Each connection gets its own 10-frame window, so several people can sign at once without mixing results. The window is cleared when the hand disappears; the confirmation history is kept, as in the local webcam test.
 - A message that is not valid JSON, a hand that is not 21 finite `[x, y]` pairs, or (v2) a missing or non-positive `w`/`h` closes the connection with code `1003`.
 
 ### WebSocket `/ws/room/{code}?token=<token>`: meeting signaling
@@ -172,10 +183,13 @@ src/model_api_test/
 │   ├── multi_hand_gesture_classifier.tflite  # Fingerspelling classifier (default)
 │   ├── multi_hand_gesture_classifier_old.knx # The same classifier for KERNIX mode
 │   ├── multi_hand_gesture_classifier.knx     # Classifier retrained on 2026-11-05 (KNX_PATH)
-│   └── multi_hand_gesture_classifier_v2.*    # v2 classifier (2026-11-17), .tflite and .knx
+│   ├── multi_hand_gesture_classifier_v2.*    # v2 classifier (2026-11-17), .tflite and .knx
+│   └── multi_hand_gesture_classifier_v2_1.*  # v2.1 classifier (2026-11-19), .tflite and .knx
 └── static/
     ├── hands.js            # In-browser hand landmark detection shared by both pages
-    ├── app.html            # Meeting app (login, meeting list, WebRTC, captions)
+    ├── app.html            # Meeting app page: styles and import map (React from esm.sh, no build step)
+    ├── app.js              # Meeting app in React + htm (login, meeting list, WebRTC, captions)
+    ├── hangul.js           # Jamo-to-syllable composer; self-check: `node src/model_api_test/static/hangul.js`
     └── index.html          # Single-user recognition demo
 ```
 

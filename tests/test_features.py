@@ -45,14 +45,19 @@ def server(raw_right, raw_left, version, w=1.0, h=1.0):
     return main.process_hand_landmarks(joint, mirror, version, w, h)
 
 
-def test_v2_matches_training():
+def test_v2_matches_training(version="v2"):
     rng = np.random.default_rng(0)
     for _ in range(200):
         right, left = (rng.random((21, 2)).astype(np.float32) for _ in range(2))
         for r, l in ((right, None), (None, left), (right, left)):
-            got, want = server(r, l, "v2", 640, 360), train_v2(r, l, 640, 360)
+            got, want = server(r, l, version, 640, 360), train_v2(r, l, 640, 360)
             assert got.shape == (75,)
             assert_close(got, want)
+
+
+def test_v2_1_matches_training():
+    # v2.1은 v2와 특징이 같다 (가중치만 다름)
+    test_v2_matches_training("v2.1")
 
 
 def test_v1_matches_training():
